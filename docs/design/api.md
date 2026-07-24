@@ -1,0 +1,169 @@
+# REST API設計
+
+## 1. 共通仕様
+
+- ベースパス: `/api/v1`
+- 形式: JSON、文字コードUTF-8、プロパティ名は`camelCase`
+- 認証: `Authorization: Bearer <accessToken>`。RefreshだけはHttpOnly Cookieを使用する。
+- 日付: `YYYY-MM-DD`、業務日付は`Asia/Tokyo`。日時はISO 8601 UTC（例: `2026-07-21T01:30:00Z`）。
+- ID: UUID文字列。クライアントは内部構造を解釈しない。
+- 更新系は成功時に更新後リソースを返す。秘密値の平文は仮パスワード発行直後だけ返す。
+
+### ページング
+
+`page`は1始まり、`pageSize`は既定20、最大100とする。
+
+```json
+{
+  "items": [],
+  "page": 1,
+  "pageSize": 20,
+  "total": 0
+}
+```
+
+### エラー
+
+```json
+{
+  "statusCode": 409,
+  "code": "CHECKLIST_ITEM_UPDATE_CONFLICT",
+  "message": "他のユーザーが先に更新しました。",
+  "details": { "currentItem": {} },
+  "requestId": "01J...",
+  "timestamp": "2026-07-21T01:30:00Z"
+}
+```
+
+| HTTP | 用途 |
+| --- | --- |
+| 400 | JSON形式・型・必須項目不正 |
+| 401 | 未認証、Token失効、認証失敗 |
+| 403 | ロール不足、初回パスワード未変更 |
+| 404 | 対象なし |
+| 409 | 一意制約、状態制約、楽観ロック競合 |
+| 422 | 値は正しい形式だが業務ルール違反 |
+| 429 | 認証試行・APIレート超過 |
+| 500 | 想定外エラー。内部情報は返さない |
+
+## 2. 認証API
+
+| ID | Method / Path | 認証 | 概要 |
+| --- | --- | --- | --- |
+| AUTH-01 | `POST /auth/login` | 不要 | ログイン、Token発行 |
+| AUTH-02 | `POST /auth/refresh` | Cookie | Tokenローテーション |
+| AUTH-03 | `POST /auth/logout` | Cookie | 現在セッション失効 |
+| AUTH-04 | `GET /auth/me` | 必要 | 自分の情報取得 |
+| AUTH-05 | `PATCH /auth/password` | 必要 | 自分のパスワード変更 |
+
+`POST /auth/login`
+
+```json
+{ "loginId": "worker01", "password": "input-password" }
+```
+
+```json
+{
+  "accessToken": "jwt",
+  "expiresIn": 900,
+  "user": {
+    "id": "uuid",
+    "name": "山田 太郎",
+    "loginId": "worker01",
+    "role": "WORKER",
+    "mustChangePassword": true
+  }
+}
+```
+
+`PATCH /auth/password`は`currentPassword`、`newPassword`を受け取る。成功時は全Refreshセッションを失効し、`204`を返す。
+
+## 3. ユーザーAPI（管理者）
+
+| ID | Method / Path | 概要 |
+| --- | --- | --- |
+| USER-01 | `GET /users` | 検索、role/status絞り込み、ページング |
+| USER-02 | `POST /users` | ユーザー作成と仮パスワード発行 |
+| USER-03 | `GET /users/:id` | 詳細取得 |
+| USER-04 | `PATCH /users/:id` | 名前、loginId、roleを更新 |
+| USER-05 | `PATCH /users/:id/status` | 利用停止・再有効化 |
+| USER-06 | `POST /users/:id/temporary-password` | 仮パスワード再発行 |
+
+作成リクエストは`name`、`loginId`、`role`を受け取る。作成・再発行レスポンスだけに`temporaryPassword`を含める。更新は`version`必須とする。
+
+## 4. カテゴリAPI（管理者）
+
+| ID | Method / Path | 概要 |
+| --- | --- | --- |
+| CAT-01 | `GET /categories` | 検索、status絞り込み、一覧取得 |
+| CAT-02 | `POST /categories` | 作成 |
+| CAT-03 | `GET /categories/:id` | 詳細取得 |
+| CAT-04 | `PATCH /categories/:id` | name、displayOrder更新 |
+| CAT-05 | `PATCH /categories/:id/status` | 利用停止・再有効化 |
+
+作成・更新項目は`name`、`displayOrder`。更新・状態変更は`version`必須とする。
+
+## 5. 道具API
+
+| ID | Method / Path | 権限 | 概要 |
+| --- | --- | --- | --- |
+| TOOL-01 | `GET /tools` | 全ユーザー | 検索、categoryId/status絞り込み、ページング |
+| TOOL-02 | `POST /tools` | 管理者 | 作成 |
+| TOOL-03 | `GET /tools/:id` | 全ユーザー | 詳細取得 |
+| TOOL-04 | `PATCH /tools/:id` | 管理者 | name、categoryId、stockQuantity、displayOrder更新 |
+| TOOL-05 | `PATCH /tools/:id/status` | 管理者 | 利用停止・再有効化 |
+
+```json
+{
+  "name": "インパクトドライバー",
+  "categoryId": "uuid",
+  "stockQuantity": 3,
+  "displayOrder": 10
+}
+```
+
+## 6. 日別チェックAPI
+
+| ID | Method / Path | 権限 | 概要 |
+| --- | --- | --- | --- |
+| CHECK-01 | `GET /daily-checklists/:date` | 全ユーザー | 既存表取得。暗黙作成しない |
+| CHECK-02 | `PUT /daily-checklists/:date` | 全ユーザー | 今日・未来日の表を冪等作成・取得 |
+| CHECK-03 | `PATCH /daily-checklists/:date/items/:itemId` | 全ユーザー | 数量・チェック更新 |
+| CHECK-04 | `POST /daily-checklists/:date/items` | 管理者 | 有効な道具を手動追加 |
+
+取得レスポンス:
+
+```json
+{
+  "id": "uuid",
+  "workDate": "2026-07-21",
+  "editable": true,
+  "items": [
+    {
+      "id": "uuid",
+      "sourceToolId": "uuid",
+      "toolName": "インパクトドライバー",
+      "categoryName": "電動工具",
+      "stockQuantity": 3,
+      "takeoutQuantity": 2,
+      "checked": true,
+      "version": 4,
+      "updatedAt": "2026-07-21T01:30:00Z"
+    }
+  ]
+}
+```
+
+更新リクエスト:
+
+```json
+{ "takeoutQuantity": 2, "checked": true, "version": 3 }
+```
+
+- APIは数量0なら`checked=false`へ正規化する。数量0で`checked=true`を明示した場合は`422`とする。
+- バージョン不一致時は`409`の`details.currentItem`へ最新値を含める。
+- 手動追加は`{ "toolId": "uuid" }`を受け取り、無効道具・重複・過去日を拒否する。
+
+## 7. ヘルスチェック
+
+`GET /api/health`は認証不要で、正常時`200 {"status":"ok"}`を返す。DBや秘密情報の詳細は公開せず、ALBの死活監視に必要な最小情報だけを返す。

@@ -1,0 +1,32 @@
+.playwright-mcp/
+
+# Node.js / Vite / NestJS
+**/node_modules/
+frontend/dist/
+backend/dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+
+# E2E (Playwright) generated files
+e2e/node_modules/
+e2e/results/
+e2e/test-results/
+e2e/playwright-report/
+
+# k6 generated files
+perf/results/
+
+# Terraform (infra/)
+# .terraform/ is provider cache and can be regenerated.
+# *.tfstate* and *.tfvars may contain secrets, so keep them out of git.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+tfplan
+tfplan*

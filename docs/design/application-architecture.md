@@ -67,16 +67,17 @@ sequenceDiagram
     participant Vue
     participant Nest as NestJS API
     participant DB as MySQL
-    User->>Vue: 日付を選択
-    Vue->>Nest: PUT /api/v1/daily-checklists/:date
+    User->>Vue: ホームから日付・作成方式・時間帯別カテゴリを選択
+    Vue->>Nest: PUT /api/v1/daily-checklists/:date<br/>scheduleMode + periods[].categoryIds
     Nest->>DB: 表を検索
     alt 未作成
-      Nest->>DB: ヘッダーと有効道具スナップショットをTransaction作成
+      Nest->>DB: ヘッダー・時間帯・選択カテゴリをTransaction作成
+      Nest->>DB: 選択カテゴリと共通カテゴリの道具を時間帯別に複製
     end
-    DB-->>Nest: 日別表
-    Nest-->>Vue: items + version
+    DB-->>Nest: 時間帯別の日別表
+    Nest-->>Vue: periods + items + version
     User->>Vue: 数量/チェック変更
-    Vue->>Nest: PATCH item + version
+    Vue->>Nest: PATCH /periods/:period/items/:itemId<br/>takeoutQuantity + checked + version
     Nest->>DB: version一致時のみUPDATE
     DB-->>Nest: 更新結果
     Nest-->>Vue: 更新後itemまたは409+最新item

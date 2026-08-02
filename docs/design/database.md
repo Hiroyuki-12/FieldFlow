@@ -14,7 +14,10 @@ erDiagram
     USERS ||--o{ REFRESH_SESSIONS : owns
     USERS ||--o{ DAILY_CHECKLISTS : creates
     CATEGORIES ||--o{ TOOLS : classifies
-    DAILY_CHECKLISTS ||--|{ DAILY_CHECKLIST_ITEMS : contains
+    DAILY_CHECKLISTS ||--|{ DAILY_CHECKLIST_PERIODS : divides
+    DAILY_CHECKLIST_PERIODS ||--|{ DAILY_CHECKLIST_PERIOD_CATEGORIES : selects
+    CATEGORIES ||--o{ DAILY_CHECKLIST_PERIOD_CATEGORIES : snapshots
+    DAILY_CHECKLIST_PERIODS ||--|{ DAILY_CHECKLIST_ITEMS : contains
     TOOLS ||--o{ DAILY_CHECKLIST_ITEMS : source
 
     USERS {
@@ -47,6 +50,7 @@ erDiagram
       char36 id PK
       varchar name UK
       int display_order
+      enum category_type
       enum status
       int version
       datetime created_at
@@ -66,13 +70,29 @@ erDiagram
     DAILY_CHECKLISTS {
       char36 id PK
       date work_date UK
+      enum schedule_mode
       char36 created_by_user_id FK
       datetime created_at
       datetime updated_at
     }
-    DAILY_CHECKLIST_ITEMS {
+    DAILY_CHECKLIST_PERIODS {
       char36 id PK
       char36 checklist_id FK
+      enum period
+      datetime created_at
+      datetime updated_at
+    }
+    DAILY_CHECKLIST_PERIOD_CATEGORIES {
+      char36 id PK
+      char36 period_id FK
+      char36 source_category_id FK
+      varchar category_name_snapshot
+      int display_order_snapshot
+      datetime created_at
+    }
+    DAILY_CHECKLIST_ITEMS {
+      char36 id PK
+      char36 period_id FK
       char36 source_tool_id FK
       varchar tool_name_snapshot
       varchar category_name_snapshot
@@ -114,25 +134,43 @@ erDiagram
 ### categories / tools
 
 - カテゴリ・道具の名称はDB照合順序でも大文字小文字を区別せず一意にする。
+- categoriesの`category_type`は`WORK`または`COMMON`とし、通常は`WORK`を使用する。
+- `COMMON`はSeedで1件だけ作成し、Service層で名称変更・利用停止・重複作成を拒否する。
 - toolsの`category_id`はcategoriesへ`ON DELETE RESTRICT`で参照する。
 - 主なインデックスはcategoriesの`(status, display_order)`、toolsの`(status, category_id, display_order)`。
 
 ### daily_checklists
 
-- `work_date unique`により1日1件を保証する。
+- `work_date unique`により1日1件のヘッダーを保証する。
+- `schedule_mode`は`FULL_DAY`または`SPLIT`とし、作成後は変更しない。
 - `created_by_user_id`は作成者の管理情報であり、誰が各チェックを変更したかを示す業務履歴ではない。
 - ユーザー利用停止後も参照を残すため`ON DELETE RESTRICT`とする。
 
+### daily_checklist_periods
+
+- `period`は`FULL_DAY`、`MORNING`、`AFTERNOON`とする。
+- `(checklist_id, period)`を一意とする。
+- `schedule_mode=FULL_DAY`では`FULL_DAY`を1件、`SPLIT`では`MORNING`と`AFTERNOON`を各1件作成し、Service層と結合テストで整合性を保証する。
+
+### daily_checklist_period_categories
+
+- 時間帯ごとに利用者が選択した作業カテゴリを保存する。
+- `(period_id, source_category_id)`を一意とし、同じカテゴリの重複追加を防ぐ。
+- `category_name_snapshot`と`display_order_snapshot`に作成・追加時点の値を保存し、マスター名変更の影響を受けない。
+- `COMMON`は利用者の選択として登録せず、道具項目の自動追加にだけ使用する。
+
 ### daily_checklist_items
 
-- `(checklist_id, source_tool_id)`を一意とし、同一道具の重複追加を防ぐ。
+- `(period_id, source_tool_id)`を一意とし、同じ時間帯への同一道具の重複追加を防ぐ。
 - 数量は`check (takeout_quantity between 0 and stock_quantity_snapshot)`を付ける。
 - `checked=true`かつ数量0を禁止するCHECK制約を付け、Service層でも同じ検証を行う。
 - 更新SQLは`where id = ? and version = ?`とし、成功時`version = version + 1`。更新件数0なら競合として最新行を取得する。
 
 ## 4. トランザクション
 
-- 日別表初回生成は、ヘッダー作成と有効道具の一括複製を1トランザクションで行う。
+- 日別表初回生成は、ヘッダー、必要な時間帯、選択した作業カテゴリ、対象道具の複製を1トランザクションで行う。
+- `SPLIT`は午前・午後の両方を同じトランザクションで作成し、片方だけが残る状態を作らない。
+- 作業カテゴリ追加は時間帯カテゴリと対象道具を同じトランザクションで追加する。
 - 同時生成で一意制約に負けた処理はロールバックし、既存表を取得して正常応答する。
 - 数量0への変更とチェック解除は1回のUPDATEで行う。
 - カテゴリ停止判定、最後の管理者判定はトランザクション内で対象をロックしてから更新する。

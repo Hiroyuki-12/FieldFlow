@@ -91,7 +91,7 @@
 
 作成リクエストは`name`、`loginId`、`role`を受け取る。作成・再発行レスポンスだけに`temporaryPassword`を含める。更新は`version`必須とする。
 
-## 4. カテゴリAPI（管理者）
+## 4. 作業カテゴリAPI（管理者）
 
 | ID | Method / Path | 概要 |
 | --- | --- | --- |
@@ -101,7 +101,7 @@
 | CAT-04 | `PATCH /categories/:id` | name、displayOrder更新 |
 | CAT-05 | `PATCH /categories/:id/status` | 利用停止・再有効化 |
 
-作成・更新項目は`name`、`displayOrder`。更新・状態変更は`version`必須とする。
+作成・更新項目は`name`、`displayOrder`。通常の作成は`categoryType=WORK`とし、`COMMON`はSeedだけで作成する。更新・状態変更は`version`必須とし、`COMMON`の名称変更・利用停止は拒否する。
 
 ## 5. 道具API
 
@@ -126,10 +126,26 @@
 
 | ID | Method / Path | 権限 | 概要 |
 | --- | --- | --- | --- |
-| CHECK-01 | `GET /daily-checklists/:date` | 全ユーザー | 既存表取得。暗黙作成しない |
-| CHECK-02 | `PUT /daily-checklists/:date` | 全ユーザー | 今日・未来日の表を冪等作成・取得 |
-| CHECK-03 | `PATCH /daily-checklists/:date/items/:itemId` | 全ユーザー | 数量・チェック更新 |
-| CHECK-04 | `POST /daily-checklists/:date/items` | 管理者 | 有効な道具を手動追加 |
+| CHECK-01 | `GET /daily-checklists/:date` | 全ユーザー | 既存の日別チェックと全時間帯を取得。暗黙作成しない |
+| CHECK-02 | `PUT /daily-checklists/:date` | 全ユーザー | 作成方式と時間帯別カテゴリを指定して冪等作成・取得 |
+| CHECK-03 | `PATCH /daily-checklists/:date/periods/:period/items/:itemId` | 全ユーザー | 時間帯内の数量・チェック更新 |
+| CHECK-04 | `POST /daily-checklists/:date/periods/:period/categories` | 全ユーザー | 未選択の有効な作業カテゴリと道具を追加 |
+
+作成リクエスト（午前・午後）:
+
+```json
+{
+  "scheduleMode": "SPLIT",
+  "periods": [
+    { "period": "MORNING", "categoryIds": ["grass-category-uuid"] },
+    { "period": "AFTERNOON", "categoryIds": ["car-wash-category-uuid"] }
+  ]
+}
+```
+
+- `FULL_DAY`は`periods`に`FULL_DAY`を1件、`SPLIT`は`MORNING`と`AFTERNOON`を各1件必須とする。
+- 各時間帯の`categoryIds`は有効な`WORK`カテゴリを1件以上指定する。`COMMON`はAPIが自動追加するため明示指定しない。
+- 同じ作成方式の再送は、後からカテゴリが追加されていても現在の表を返し、リクエスト中のカテゴリを追加しない。作成済みの日付へ異なる方式を送った場合は`409 CHECKLIST_ALREADY_CONFIGURED`とする。
 
 取得レスポンス:
 
@@ -137,18 +153,28 @@
 {
   "id": "uuid",
   "workDate": "2026-07-21",
+  "scheduleMode": "SPLIT",
   "editable": true,
-  "items": [
+  "periods": [
     {
       "id": "uuid",
-      "sourceToolId": "uuid",
-      "toolName": "インパクトドライバー",
-      "categoryName": "電動工具",
-      "stockQuantity": 3,
-      "takeoutQuantity": 2,
-      "checked": true,
-      "version": 4,
-      "updatedAt": "2026-07-21T01:30:00Z"
+      "period": "MORNING",
+      "categories": [
+        { "sourceCategoryId": "uuid", "categoryName": "草取り" }
+      ],
+      "items": [
+        {
+          "id": "uuid",
+          "sourceToolId": "uuid",
+          "toolName": "草刈機",
+          "categoryName": "草取り",
+          "stockQuantity": 2,
+          "takeoutQuantity": 1,
+          "checked": true,
+          "version": 4,
+          "updatedAt": "2026-07-21T01:30:00Z"
+        }
+      ]
     }
   ]
 }
@@ -162,7 +188,7 @@
 
 - APIは数量0なら`checked=false`へ正規化する。数量0で`checked=true`を明示した場合は`422`とする。
 - バージョン不一致時は`409`の`details.currentItem`へ最新値を含める。
-- 手動追加は`{ "toolId": "uuid" }`を受け取り、無効道具・重複・過去日を拒否する。
+- カテゴリ追加は`{ "categoryIds": ["uuid"] }`を受け取り、無効・`COMMON`・選択済みカテゴリ、重複道具、過去日を拒否する。
 
 ## 7. ヘルスチェック
 

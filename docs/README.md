@@ -4,6 +4,8 @@
 
 初めて読む場合は、要件定義 → 機能定義 → 画面/API/DB → セキュリティ/AWS → テストの順に確認する。各資料は「何を作るか」だけでなく「なぜその設計にするか」を説明できることを目的とする。
 
+実装へ着手するときは、[MVP実装計画](implementation-plan.md)で依存関係、Issue分割、各段階の完了条件を確認する。
+
 ## 要件と機能
 
 - [MVP要件定義](requirements.md)
@@ -29,6 +31,7 @@
 
 ## 学習・レビュー
 
+- [MVP実装計画](implementation-plan.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係

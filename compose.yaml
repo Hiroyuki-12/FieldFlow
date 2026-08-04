@@ -1,0 +1,31 @@
+services:
+  db:
+    image: mysql:8.4.10
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fieldflow_root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fieldflow}
+      MYSQL_USER: ${MYSQL_USER:-fieldflow}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fieldflow}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      # $を2つ重ね、Composeではなくコンテナ内で環境変数を展開する。
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping --host=127.0.0.1 --user=root --password=$${MYSQL_ROOT_PASSWORD} --silent",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  mysql-data:

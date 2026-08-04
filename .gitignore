@@ -6,6 +6,9 @@ frontend/dist/
 backend/dist/
 coverage/
 *.log
+.DS_Store
+.eslintcache
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

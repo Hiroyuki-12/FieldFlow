@@ -23,20 +23,33 @@ flowchart LR
 
 ### Frontend job
 
-1. Node.js 24、`npm ci`
+1. `.node-version`で固定したNode.js 24、`npm ci`
 2. `npm run lint`
 3. `npm run typecheck`
 4. `npm test -- --run`
 5. `npm run build`
+6. `frontend/dist`をArtifactとして7日間保存
 
 ### Backend job
 
-1. Node.js 24、`npm ci`
+1. `.node-version`で固定したNode.js 24、`npm ci`
 2. `npm run lint`
 3. `npm run typecheck`
 4. `npm run test`
-5. Testcontainers MySQL 8.4による`npm run test:integration`
+5. `npm run test:integration`
 6. `npm run build`
+7. `backend/dist`をArtifactとして7日間保存
+
+CI基盤の初期段階では、Health APIのHTTP経路をDB mockと組み合わせた軽量な結合テストを実行する。業務Entity、Migration、Seedの追加後は、Testcontainers MySQL 8.4を用いたDB結合テストを同じコマンドへ追加する。
+
+### CIの再現性と安全性
+
+- Frontend・Backendを独立したjobとして並列実行し、失敗箇所を判別しやすくする。
+- `npm ci`で各`package-lock.json`どおりにインストールし、npmのダウンロードキャッシュで実行時間を短縮する。`node_modules`自体はArtifactとして共有しない。
+- Workflowの`permissions`は`contents: read`だけに制限する。
+- GitHub公式Actionも完全なcommit SHAで固定し、参照先が意図せず変更されるリスクを抑える。
+- 同じブランチの古い実行は`concurrency`でキャンセルし、最新commitの結果を優先する。
+- build成果物はデバッグと後続処理の確認用に7日間だけ保存し、秘密値を含めない。
 
 ### E2E job
 

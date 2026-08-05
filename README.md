@@ -71,8 +71,20 @@ cd ../backend
 npm run typecheck
 npm run lint
 npm test
+npm run test:integration
 npm run build
 ```
+
+## CI
+
+`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backendの品質チェックを独立したjobで並列実行します。
+
+- Frontend: lint、型チェック、単体・コンポーネントテスト、build
+- Backend: lint、型チェック、単体テスト、結合テスト、build
+- Node.jsは`.node-version`、依存パッケージは各`package-lock.json`に従って再現します。
+- build成果物はGitHub ActionsのArtifactとして7日間保存します。
+
+CIでのみ問題が起きることを避けるため、push前にも上記の品質チェックをローカルで実行します。GitHub Actionsに秘密値を追加する場合は後続Issueで用途と権限を確認し、トークンやパスワードをログやArtifactへ含めません。
 
 ## DB運用
 

@@ -26,7 +26,10 @@ const initialAdminEnvironmentSchema = Joi.object<InitialAdminSeedEnvironment>({
   INITIAL_ADMIN_PASSWORD: Joi.string().min(12).max(128).required(),
 }).unknown(true);
 
-/** Seed専用の環境変数を検証し、アプリ通常起動とは分離する。 */
+/**
+ * Seed専用の環境変数を検証し、アプリ通常起動とは分離する。
+ * 初期管理者パスワードは通常のNestJS起動には不要なので、Seed実行時だけメモリへ読み込む。
+ */
 export function readInitialAdminSeedConfig(
   environment: NodeJS.ProcessEnv,
 ): InitialAdminSeedConfig {

@@ -16,14 +16,21 @@ import type { Relation } from 'typeorm';
 import { DailyChecklistPeriod } from './daily-checklist-period.entity';
 import { Tool } from './tool.entity';
 
-/** 日別チェックの道具行。マスター変更の影響を受けないスナップショットを持つ。 */
+/**
+ * 日別チェック画面で利用者が数量とチェック状態を更新する道具1行分のデータ。
+ *
+ * Toolへの参照に加えて、作成時点の道具名・カテゴリ名・在庫数・表示順を保存する。
+ * 後からマスターを編集しても、過去のチェック内容と当時の上限を維持するため。
+ */
 @Entity({ name: 'daily_checklist_items' })
+// 同じ時間帯へ同一道具を二重追加し、数量が別々に管理される事故を防ぐ。
 @Unique('uq_daily_checklist_items_period_source', ['periodId', 'sourceToolId'])
 @Index('idx_daily_checklist_items_source_tool', ['sourceToolId'])
 @Check(
   'chk_daily_checklist_items_takeout_quantity',
   '`takeout_quantity` BETWEEN 0 AND `stock_quantity_snapshot`',
 )
+// 数量0なのに準備完了と記録される、意味の矛盾した状態をDBでも拒否する。
 @Check(
   'chk_daily_checklist_items_checked_quantity',
   'NOT (`checked` = 1 AND `takeout_quantity` = 0)',
@@ -47,6 +54,7 @@ export class DailyChecklistItem {
   @Column({ name: 'stock_quantity_snapshot', type: 'int', unsigned: true })
   stockQuantitySnapshot!: number;
 
+  // 実際に持ち出す数。保有総数であるTool.stockQuantityは変更しない。
   @Column({ name: 'takeout_quantity', type: 'int', unsigned: true, default: 0 })
   takeoutQuantity!: number;
 

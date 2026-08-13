@@ -13,8 +13,14 @@ import type { Relation } from 'typeorm';
 import { Category } from './category.entity';
 import { DailyChecklistPeriod } from './daily-checklist-period.entity';
 
-/** 時間帯で選択した作業カテゴリと、選択時点の表示情報を保持する。 */
+/**
+ * 各時間帯で利用者が選択した作業カテゴリを記録する中間・履歴テーブル。
+ *
+ * Categoryへの参照に加えて、名称と表示順の当時値（スナップショット）を保存する。
+ * 後日マスター名や表示順を変更しても、「その日に何を選んだか」という過去の表示を変えないため。
+ */
 @Entity({ name: 'daily_checklist_period_categories' })
+// 1つの時間帯へ同じカテゴリを複数回追加することをDBでも拒否する。
 @Unique('uq_period_categories_period_source', ['periodId', 'sourceCategoryId'])
 @Index('idx_period_categories_source_category', ['sourceCategoryId'])
 export class DailyChecklistPeriodCategory {
@@ -47,6 +53,7 @@ export class DailyChecklistPeriodCategory {
   })
   period!: Relation<DailyChecklistPeriod>;
 
+  // 元カテゴリを物理削除させず、当時値とマスター参照の両方を保持する。
   @ManyToOne(() => Category, (category) => category.periodCategories, {
     onDelete: 'RESTRICT',
     onUpdate: 'RESTRICT',

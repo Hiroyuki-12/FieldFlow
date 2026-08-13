@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 
 import { createDatabaseDataSource } from './data-source.factory';
 
-/** npm scriptから実行した場合だけbackend/.envを読み、CIから渡された環境変数は上書きしない。 */
+/**
+ * npm scriptから実行した場合だけ`backend/.env`を読み込む。
+ * ファイルが存在しないCI・本番では、実行環境から安全に注入された値をそのまま使用する。
+ */
 function loadLocalEnvironment(): void {
   const environmentFile = resolve(process.cwd(), '.env');
   if (existsSync(environmentFile)) {
@@ -13,7 +16,10 @@ function loadLocalEnvironment(): void {
 
 loadLocalEnvironment();
 
-/** TypeORM CLIが読み込むDataSource。秘密値そのものは出力しない。 */
+/**
+ * `migration:show/run/revert`とSeed CLIが読み込む共通DataSource。
+ * このファイルは接続設定を組み立てるだけで、import時にDB接続やMigration実行は行わない。
+ */
 const AppDataSource = createDatabaseDataSource(process.env);
 
 export default AppDataSource;

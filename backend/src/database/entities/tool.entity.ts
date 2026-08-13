@@ -17,15 +17,23 @@ import { Category } from './category.entity';
 import { DailyChecklistItem } from './daily-checklist-item.entity';
 import { RecordStatus } from './database.enums';
 
-/** チームが保有する道具のマスター。在庫数は日別の持ち出し数では変化しない。 */
+/**
+ * チームが保有する道具と在庫上限を管理する道具マスター。
+ *
+ * `stockQuantity`は保有総数であり、日々の持ち出し数は`daily_checklist_items`へ保存する。
+ * マスター変更で過去の日別表が変わらないよう、日別項目には名称・在庫数の当時値を保存する。
+ */
 @Entity({ name: 'tools' })
+// 有効な道具をカテゴリ別・表示順で取得する一覧クエリを支える。
 @Index('idx_tools_status_category_display_order', [
   'status',
   'categoryId',
   'displayOrder',
 ])
 @Index('idx_tools_category_id', ['categoryId'])
+// 表記揺れによる同一道具の二重登録をDBでも防止する。
 @Index('uq_tools_name', ['name'], { unique: true })
+// 在庫数と表示順はUI・業務ルールで扱える0〜9999に限定する。
 @Check('chk_tools_stock_quantity', '`stock_quantity` BETWEEN 0 AND 9999')
 @Check('chk_tools_display_order', '`display_order` BETWEEN 0 AND 9999')
 export class Tool {

@@ -15,9 +15,15 @@ import { DailyChecklistPeriod } from './daily-checklist-period.entity';
 import { ScheduleMode } from './database.enums';
 import { User } from './user.entity';
 
-/** 1日1件の日別チェックヘッダー。作成後にscheduleModeは変更しない。 */
+/**
+ * ある業務日に対する日別チェック表全体のヘッダー。
+ *
+ * 実際のカテゴリ・道具は時間帯テーブル以下に保存し、このテーブルは日付、運用方式、
+ * 作成者だけを持つ。`workDate`を一意にして、同日の二重作成をDBでも防止する。
+ */
 @Entity({ name: 'daily_checklists' })
 @Index('idx_daily_checklists_created_by', ['createdByUserId'])
+// 同時リクエストがService層の確認をすり抜けても、1日1表を最後にDBで保証する。
 @Index('uq_daily_checklists_work_date', ['workDate'], { unique: true })
 export class DailyChecklist {
   @PrimaryColumn({ type: 'char', length: 36 })

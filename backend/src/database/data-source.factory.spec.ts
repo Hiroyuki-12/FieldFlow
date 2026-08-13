@@ -10,6 +10,7 @@ const validEnvironment: NodeJS.ProcessEnv = {
 
 describe('createDatabaseDataSource', () => {
   it('Migration専用かつ自動同期無効のDataSourceを作る', () => {
+    // DBへ実接続せずoptionsだけを確認し、自動スキーマ変更が有効にならないことを固定する。
     const dataSource = createDatabaseDataSource(validEnvironment);
 
     expect(dataSource.options.type).toBe('mysql');
@@ -20,6 +21,7 @@ describe('createDatabaseDataSource', () => {
   });
 
   it('DB接続設定が不足している場合は実行前に拒否する', () => {
+    // 接続開始後の分かりにくいエラーではなく、不足したキーを準備段階で通知する。
     expect(() =>
       createDatabaseDataSource({
         ...validEnvironment,

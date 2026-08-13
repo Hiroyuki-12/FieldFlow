@@ -14,10 +14,17 @@ function requireEnvironmentValue(
   return value;
 }
 
-/** Migration CLIとTestcontainersから再利用できるDataSourceを作る。 */
+/**
+ * Migration CLIとTestcontainersから再利用できるDataSourceを作る。
+ *
+ * NestJSへ依存しないFactoryにしているため、アプリを起動せずにMigrationを実行できる。
+ * 結合テストも同じFactoryを使うことで、本番用Migrationと異なる接続設定で検証してしまう
+ * 事故を避ける。
+ */
 export function createDatabaseDataSource(
   environment: NodeJS.ProcessEnv,
 ): DataSource {
+  // 環境変数はすべて文字列なので、DB接続前に数値へ変換して設定ミスを早期検出する。
   const port = Number(requireEnvironmentValue(environment, 'DB_PORT'));
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error('DB_PORT must be a positive integer');
@@ -35,8 +42,9 @@ export function createDatabaseDataSource(
     entities: DATABASE_ENTITIES,
     migrations: DATABASE_MIGRATIONS,
     migrationsTableName: 'migrations',
-    // CLIでも自動同期を許可せず、必ずレビュー可能なMigrationを適用する。
+    // NestJS側と同様に自動同期を禁止し、CLIからもMigrationだけを適用する。
     synchronize: false,
+    // `migration:run`などの明示的なコマンドを実行した場合だけDBを変更する。
     migrationsRun: false,
   };
 

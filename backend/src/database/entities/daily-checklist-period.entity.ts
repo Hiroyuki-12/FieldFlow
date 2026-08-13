@@ -16,8 +16,14 @@ import { DailyChecklistPeriodCategory } from './daily-checklist-period-category.
 import { DailyChecklist } from './daily-checklist.entity';
 import { ChecklistPeriodType } from './database.enums';
 
-/** 日別チェックをFULL_DAY、MORNING、AFTERNOONの単位へ分ける。 */
+/**
+ * 日別チェック表を「終日」または「午前・午後」の操作単位へ分割する。
+ *
+ * FULL_DAY方式ではFULL_DAYを1行、SPLIT方式ではMORNINGとAFTERNOONを各1行作る。
+ * scheduleModeとの組み合わせは複数行にまたがるため、ServiceのTransactionで保証する。
+ */
 @Entity({ name: 'daily_checklist_periods' })
+// 同じ日別表に午前が2行作られるなど、時間帯の重複を防ぐ。
 @Unique('uq_daily_checklist_periods_checklist_period', [
   'checklistId',
   'period',
@@ -54,6 +60,7 @@ export class DailyChecklistPeriod {
   )
   categories!: Relation<DailyChecklistPeriodCategory[]>;
 
+  // 各時間帯が、実際に数量・チェック状態を更新する複数の道具行を持つ。
   @OneToMany(() => DailyChecklistItem, (item) => item.period)
   items!: Relation<DailyChecklistItem[]>;
 }

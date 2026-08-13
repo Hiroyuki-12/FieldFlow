@@ -3,11 +3,17 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 /**
  * FieldFlow MVPの全テーブルを作る初回Migration。
  * Entityの自動同期へ依存せず、レビュー済みのSQLだけを各環境へ同じ順序で適用する。
+ *
+ * 作成順は外部キーの依存関係に合わせている。
+ * まず参照されるマスター／親テーブルを作り、その後に参照する子テーブルを作ることで、
+ * 空のMySQLへこのMigrationだけを適用しても外部キーエラーにならないようにしている。
  */
 export class InitialSchema1786000000000 implements MigrationInterface {
   name = 'InitialSchema1786000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // 認証と監査情報の起点になるユーザーを最初に作る。
+    // login_idの一意制約、ロック情報、楽観ロック用versionまでDB構造として固定する。
     await queryRunner.query(`
       CREATE TABLE \`users\` (
         \`id\` char(36) NOT NULL,
@@ -29,6 +35,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // Refresh Tokenは端末ごとの失効・ローテーションを管理するためUserから分離する。
+    // Token本体ではなく64文字のハッシュを保存し、漏洩時にそのまま再利用されるのを防ぐ。
     await queryRunner.query(`
       CREATE TABLE \`refresh_sessions\` (
         \`id\` char(36) NOT NULL,
@@ -51,6 +59,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 道具の親となるカテゴリを先に作る。
+    // 名称の一意性と表示順の範囲は、APIを通さない操作に対してもDBで保証する。
     await queryRunner.query(`
       CREATE TABLE \`categories\` (
         \`id\` char(36) NOT NULL,
@@ -68,6 +78,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 道具は必ず既存カテゴリに所属させ、カテゴリ削除時の連鎖削除は行わない。
+    // 過去の日別表から参照されるため、削除ではなくstatusによる利用停止を前提にする。
     await queryRunner.query(`
       CREATE TABLE \`tools\` (
         \`id\` char(36) NOT NULL,
@@ -90,6 +102,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 日別表のヘッダーを作る。work_dateを一意にして「1日1表」をDBの最終防衛線にする。
+    // 作成者は監査情報なので、ユーザーが参照中なら物理削除を拒否する。
     await queryRunner.query(`
       CREATE TABLE \`daily_checklists\` (
         \`id\` char(36) NOT NULL,
@@ -106,6 +120,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 1日を終日、または午前・午後の操作単位へ分ける。
+    // 同じ表・同じ時間帯の組み合わせを一意にし、二重作成を防止する。
     await queryRunner.query(`
       CREATE TABLE \`daily_checklist_periods\` (
         \`id\` char(36) NOT NULL,
@@ -120,6 +136,8 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 時間帯ごとに選択したカテゴリと、選択時点の名称・表示順を履歴として保存する。
+    // マスター変更後も当時の表示を再現できるよう、参照IDと当時値の両方を持つ。
     await queryRunner.query(`
       CREATE TABLE \`daily_checklist_period_categories\` (
         \`id\` char(36) NOT NULL,
@@ -138,6 +156,9 @@ export class InitialSchema1786000000000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     `);
 
+    // 日別表で実際に操作する道具行を最後に作る。
+    // 在庫上限と「数量0でchecked=trueは禁止」をCHECK制約でも保証し、
+    // Serviceの不具合や手動SQLがあっても矛盾したチェック状態を保存させない。
     await queryRunner.query(`
       CREATE TABLE \`daily_checklist_items\` (
         \`id\` char(36) NOT NULL,
@@ -168,7 +189,9 @@ export class InitialSchema1786000000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // 外部キーの参照元から逆順に落とし、Migrationのrevertでも整合性を守る。
+    // upとは逆に、外部キーで参照する子テーブルから削除する。
+    // 親を先に消すとMySQLが外部キー違反で停止するため、この順序を変更しない。
+    // 本番では破壊的rollbackへ安易に依存せず、主にローカル開発でのrevertを想定する。
     await queryRunner.query('DROP TABLE `daily_checklist_items`');
     await queryRunner.query('DROP TABLE `daily_checklist_period_categories`');
     await queryRunner.query('DROP TABLE `daily_checklist_periods`');

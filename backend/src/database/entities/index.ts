@@ -7,7 +7,11 @@ import { RefreshSession } from './refresh-session.entity';
 import { Tool } from './tool.entity';
 import { User } from './user.entity';
 
-/** NestJSとCLIで同じEntity一覧を使い、登録漏れによる環境差を防ぐ。 */
+/**
+ * NestJS、Migration CLI、Seed、結合テストで共有するEntity一覧。
+ * 新しいEntityを追加したらここにも登録する。1か所に集約することで、実行方法によって
+ * 読み込まれるEntityが異なり、Relationやスキーマ比較が失敗する状態を防ぐ。
+ */
 export const DATABASE_ENTITIES = [
   User,
   RefreshSession,

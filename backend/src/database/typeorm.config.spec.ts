@@ -4,6 +4,7 @@ import { createTypeOrmOptions } from './typeorm.config';
 
 describe('createTypeOrmOptions', () => {
   it('DBスキーマの自動同期を常に無効にする', () => {
+    // NestJS起動用の設定でもsynchronize/migrationsRunが誤って有効にならないよう回帰テストする。
     const values = new Map<string, string | number>([
       ['DB_HOST', '127.0.0.1'],
       ['DB_PORT', 3306],

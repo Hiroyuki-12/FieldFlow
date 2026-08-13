@@ -89,8 +89,19 @@ CIでのみ問題が起きることを避けるため、push前にも上記の�
 ## DB運用
 
 - ローカル開発ではDocker ComposeのMySQL 8.4を使用します。
-- Backend結合テストでは、後続IssueでTestcontainersの隔離されたMySQL 8.4を使用します。
-- TypeORMの`synchronize`は全環境で無効です。業務テーブルは後続IssueでMigrationから作成します。
+- Backend結合テストでは、Testcontainersの隔離されたMySQL 8.4を使用します。Docker Desktopを起動してから実行してください。
+- TypeORMの`synchronize`は全環境で無効です。スキーマ変更はMigrationだけで行います。
 - DB停止は`docker compose stop db`を使用します。volumeを削除する操作はデータを失うため、明示的な目的がない限り行いません。
+
+開発DBを起動した後、初回MigrationとSeedを次の順序で実行します。
+
+```bash
+cd backend
+npm run migration:show
+npm run migration:run
+npm run seed:run
+```
+
+`seed:run`は`backend/.env`の`INITIAL_ADMIN_NAME`、`INITIAL_ADMIN_LOGIN_ID`、`INITIAL_ADMIN_PASSWORD`を使用します。初期管理者と`共通`カテゴリがすでに存在する場合は作り直さないため、再実行してもパスワードや業務データを上書きしません。平文パスワードはDB・ログ・Gitへ保存しないでください。
 
 設計資料の一覧は[docs/README.md](docs/README.md)を参照してください。

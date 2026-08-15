@@ -24,12 +24,15 @@
     "@nestjs/common": "11.1.28",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.1.28",
+    "@nestjs/jwt": "11.0.2",
     "@nestjs/platform-express": "11.1.28",
-    "@nestjs/swagger": "11.4.5",
+    "@nestjs/swagger": "11.4.6",
+    "@nestjs/throttler": "6.5.0",
     "@nestjs/typeorm": "11.0.3",
     "argon2": "0.45.1",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
+    "cookie-parser": "1.4.7",
     "joi": "18.2.3",
     "mysql2": "3.23.2",
     "reflect-metadata": "0.2.2",
@@ -41,6 +44,7 @@
     "@nestjs/cli": "11.0.24",
     "@nestjs/testing": "11.1.28",
     "@testcontainers/mysql": "12.1.0",
+    "@types/cookie-parser": "1.4.10",
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
     "@types/node": "24.13.3",
@@ -56,5 +60,10 @@
     "ts-node": "10.9.2",
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0"
+  },
+  "overrides": {
+    "@nestjs/swagger": {
+      "js-yaml": "5.3.0"
+    }
   }
 }

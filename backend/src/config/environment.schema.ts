@@ -11,8 +11,27 @@ export const environmentValidationSchema = Joi.object({
     .uri({ scheme: ['http', 'https'] })
     .required(),
   DB_HOST: Joi.string().hostname().required(),
-  DB_PORT: Joi.number().integer().valid(3306).required(),
+  // 開発・本番は標準3306へ固定する。Testcontainersだけは隔離用の動的host portを許可する。
+  DB_PORT: Joi.number()
+    .integer()
+    .when('NODE_ENV', {
+      is: 'test',
+      then: Joi.number().integer().min(1).max(65535).required(),
+      otherwise: Joi.valid(3306).required(),
+    }),
   DB_NAME: Joi.string().min(1).required(),
   DB_USER: Joi.string().min(1).required(),
   DB_PASSWORD: Joi.string().min(1).required(),
+  // JWT鍵はソースへ直書きせず、推測困難な32byte以上の秘密値を環境から注入する。
+  JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+  JWT_ACCESS_TTL_SECONDS: Joi.number().integer().min(60).required(),
+  REFRESH_TOKEN_TTL_SECONDS: Joi.number().integer().min(60).required(),
+  COOKIE_SECURE: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .when('NODE_ENV', {
+      is: 'production',
+      then: Joi.valid(true).required(),
+      otherwise: Joi.required(),
+    }),
 });

@@ -32,6 +32,7 @@
 ## 学習・レビュー
 
 - [MVP実装計画](implementation-plan.md)
+- [ロードマップ4 Backend認証・認可 実装計画](plans/roadmap-04-backend-auth.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係

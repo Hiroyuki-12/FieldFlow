@@ -9,6 +9,10 @@ const validEnvironment = {
   DB_NAME: 'fieldflow',
   DB_USER: 'fieldflow',
   DB_PASSWORD: 'fieldflow',
+  JWT_ACCESS_SECRET: 'test-secret-with-at-least-32-characters',
+  JWT_ACCESS_TTL_SECONDS: 900,
+  REFRESH_TOKEN_TTL_SECONDS: 604800,
+  COOKIE_SECURE: false,
 };
 
 describe('environmentValidationSchema', () => {
@@ -41,5 +45,37 @@ describe('environmentValidationSchema', () => {
     });
 
     expect(result.error?.message).toContain('PORT');
+  });
+
+  it('Testcontainersの動的DB portはtest環境だけ受け入れる', () => {
+    // 結合テストは開発用3306を使い回さず、隔離コンテナへ割り当てられたportへ接続する。
+    const result = environmentValidationSchema.validate({
+      ...validEnvironment,
+      NODE_ENV: 'test',
+      DB_PORT: 49152,
+    });
+
+    expect(result.error).toBeUndefined();
+  });
+
+  it('短いJWT署名鍵を拒否する', () => {
+    // 推測しやすい短い鍵でAccess Tokenが署名される前に、起動時検証で停止させる。
+    const result = environmentValidationSchema.validate({
+      ...validEnvironment,
+      JWT_ACCESS_SECRET: 'too-short',
+    });
+
+    expect(result.error?.message).toContain('JWT_ACCESS_SECRET');
+  });
+
+  it('本番でSecure Cookieを無効にする設定を拒否する', () => {
+    // HTTPS本番環境でRefresh Cookieが平文通信へ送られる設定事故を防ぐ。
+    const result = environmentValidationSchema.validate({
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      COOKIE_SECURE: false,
+    });
+
+    expect(result.error?.message).toContain('COOKIE_SECURE');
   });
 });

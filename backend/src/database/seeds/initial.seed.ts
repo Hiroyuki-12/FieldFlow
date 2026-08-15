@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { argon2id, hash } from 'argon2';
 import { DataSource } from 'typeorm';
 
+import { hashPassword } from '../../common/security/password-hashing';
 import {
   Category,
   CategoryType,
@@ -11,15 +11,6 @@ import {
   UserRole,
 } from '../entities';
 import { InitialAdminSeedConfig } from './seed.config';
-
-const ARGON2_OPTIONS = {
-  // パスワード保存用途に適したArgon2idを明示し、ライブラリの既定値変更へ依存しない。
-  type: argon2id,
-  // OWASP推奨構成を基準に、メモリ・反復回数・並列数を固定して環境差を防ぐ。
-  memoryCost: 19 * 1024,
-  timeCost: 2,
-  parallelism: 1,
-} as const;
 
 export interface InitialSeedResult {
   commonCategoryCreated: boolean;
@@ -77,7 +68,7 @@ export async function runInitialSeed(
     let initialAdminCreated = false;
     if (!existingAdmin) {
       // 平文はこの処理中だけ使用し、DBにはArgon2idハッシュだけを保存する。
-      const passwordHash = await hash(config.password, ARGON2_OPTIONS);
+      const passwordHash = await hashPassword(config.password);
       await userRepository.save(
         userRepository.create({
           id: randomUUID(),

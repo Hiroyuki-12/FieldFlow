@@ -6,7 +6,6 @@ import {
   OneToMany,
   PrimaryColumn,
   UpdateDateColumn,
-  VersionColumn,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 
@@ -70,8 +69,8 @@ export class User {
   })
   lockedUntil!: Date | null;
 
-  // 同時編集による意図しない上書きを検出するため、更新ごとに加算する。
-  @VersionColumn({ type: 'int', unsigned: true, default: 1 })
+  // 管理画面の編集競合だけを検出する。ログイン失敗回数など認証内部の更新では増やさない。
+  @Column({ type: 'int', unsigned: true, default: 1 })
   version!: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime', precision: 6 })

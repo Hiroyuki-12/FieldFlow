@@ -45,6 +45,7 @@ interface UserAuthRow {
   authVersion: number;
   failedLoginCount: number;
   lockedUntil: Date | null;
+  version: number;
 }
 
 describe('Auth API (integration)', () => {
@@ -145,14 +146,14 @@ describe('Auth API (integration)', () => {
     await dataSource.query(
       `UPDATE users
        SET password_hash = ?, status = ?, must_change_password = true,
-           auth_version = 1, failed_login_count = 0, locked_until = NULL
+           auth_version = 1, failed_login_count = 0, locked_until = NULL, version = 1
        WHERE id = ?`,
       [initialAdminHash, RecordStatus.ACTIVE, adminId],
     );
     await dataSource.query(
       `UPDATE users
        SET password_hash = ?, status = ?, must_change_password = false,
-           auth_version = 1, failed_login_count = 0, locked_until = NULL
+           auth_version = 1, failed_login_count = 0, locked_until = NULL, version = 1
        WHERE id = ?`,
       [workerHash, RecordStatus.ACTIVE, workerId],
     );
@@ -216,15 +217,35 @@ describe('Auth API (integration)', () => {
       `SELECT failed_login_count AS failedLoginCount, locked_until AS lockedUntil,
               password_hash AS passwordHash,
               must_change_password AS mustChangePassword,
-              auth_version AS authVersion
+              auth_version AS authVersion, version
        FROM users WHERE id = ?`,
       [workerId],
     );
     expect(user?.failedLoginCount).toBe(5);
     expect(user?.lockedUntil).toBeInstanceOf(Date);
+    // 認証試行の状態更新は、管理画面の楽観ロック世代へ影響させない。
+    expect(user?.version).toBe(1);
 
     // 正しいパスワードへ切り替えても、ロック期限までは認証できない。
     await login('worker01', workerPassword).expect(401);
+  });
+
+  it('ログイン失敗後に成功して失敗状態を初期化しても管理用versionを増やさない', async () => {
+    await login('worker01', 'wrong password 123').expect(401);
+    await login('worker01', workerPassword).expect(200);
+
+    const [worker] = await dataSource.query<UserAuthRow[]>(
+      `SELECT password_hash AS passwordHash,
+              must_change_password AS mustChangePassword,
+              auth_version AS authVersion,
+              failed_login_count AS failedLoginCount,
+              locked_until AS lockedUntil, version
+       FROM users WHERE id = ?`,
+      [workerId],
+    );
+    expect(worker?.failedLoginCount).toBe(0);
+    expect(worker?.lockedUntil).toBeNull();
+    expect(worker?.version).toBe(1);
   });
 
   it('存在しないユーザーと利用停止ユーザーを同じ401で拒否する', async () => {
@@ -269,9 +290,7 @@ describe('Auth API (integration)', () => {
 
   it('Refreshをローテーションし、旧Token再利用時は全Sessionを失効する', async () => {
     const loginResponse = await login('worker01', workerPassword).expect(200);
-    const oldCookie = extractRefreshCookie(
-      loginResponse.headers['set-cookie'],
-    );
+    const oldCookie = extractRefreshCookie(loginResponse.headers['set-cookie']);
     const refreshResponse = await refresh(oldCookie).expect(200);
     const nextCookie = extractRefreshCookie(
       refreshResponse.headers['set-cookie'],
@@ -309,9 +328,9 @@ describe('Auth API (integration)', () => {
       .set('Origin', origin)
       .set('Cookie', firstCookie)
       .expect(204);
-    expect(normalizeSetCookies(logoutResponse.headers['set-cookie'])[0]).toContain(
-      `${REFRESH_TOKEN_COOKIE_NAME}=;`,
-    );
+    expect(
+      normalizeSetCookies(logoutResponse.headers['set-cookie'])[0],
+    ).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=;`);
 
     await refresh(firstCookie).expect(401);
     await refresh(secondCookie).expect(200);
@@ -349,7 +368,7 @@ describe('Auth API (integration)', () => {
               must_change_password AS mustChangePassword,
               auth_version AS authVersion,
               failed_login_count AS failedLoginCount,
-              locked_until AS lockedUntil
+              locked_until AS lockedUntil, version
        FROM users WHERE id = ?`,
       [adminId],
     );
@@ -358,6 +377,8 @@ describe('Auth API (integration)', () => {
     ).resolves.toBe(true);
     expect(admin?.mustChangePassword).toBe(0);
     expect(admin?.authVersion).toBe(2);
+    // 本人の認証情報変更は管理者が編集するname／loginId／roleの競合世代と分離する。
+    expect(admin?.version).toBe(1);
 
     const nextLogin = await login('admin', newAdminPassword).expect(200);
     const nextBody = nextLogin.body as LoginBody;
@@ -366,7 +387,10 @@ describe('Auth API (integration)', () => {
       .set('Authorization', `Bearer ${nextBody.accessToken}`)
       .expect(200)
       .expect(({ body: meBody }: { body: unknown }) => {
-        expect(meBody).toMatchObject({ id: adminId, mustChangePassword: false });
+        expect(meBody).toMatchObject({
+          id: adminId,
+          mustChangePassword: false,
+        });
       });
   });
 

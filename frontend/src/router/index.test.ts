@@ -1,0 +1,74 @@
+import { createPinia, setActivePinia } from 'pinia';
+import { createMemoryHistory } from 'vue-router';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { useAuthStore } from '../stores/auth';
+import { createAppRouter, sanitizeInternalRedirect } from '.';
+
+const normalSession = {
+  accessToken: 'access-token',
+  expiresIn: 900,
+  user: {
+    id: 'worker-1',
+    name: '作業 一郎',
+    loginId: 'worker.one',
+    role: 'WORKER' as const,
+    mustChangePassword: false,
+  },
+};
+
+describe('Router Guard', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('未認証ユーザーをLoginへ戻り先付きで案内する', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push('/password');
+
+    expect(router.currentRoute.value.name).toBe('login');
+    expect(router.currentRoute.value.query.redirect).toBe('/password');
+  });
+
+  it('初回パスワード変更前は他の認証済み画面へ進ませない', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.applySession({
+      ...normalSession,
+      user: { ...normalSession.user, mustChangePassword: true },
+    });
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push('/');
+
+    expect(router.currentRoute.value.name).toBe('initial-password-change');
+  });
+
+  it('Role不足の管理Routeは403へ案内する', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.applySession(normalSession);
+    const router = createAppRouter(pinia, createMemoryHistory());
+    router.addRoute({
+      path: '/admin-test',
+      name: 'admin-test',
+      component: { template: '<div>admin</div>' },
+      meta: { requiresAuth: true, roles: ['ADMIN'] },
+    });
+
+    await router.push('/admin-test');
+
+    expect(router.currentRoute.value.name).toBe('forbidden');
+  });
+
+  it('外部URL形式をログイン後の戻り先に採用しない', () => {
+    expect(sanitizeInternalRedirect('/password')).toBe('/password');
+    expect(sanitizeInternalRedirect('//attacker.example')).toBeNull();
+    expect(sanitizeInternalRedirect('https://attacker.example')).toBeNull();
+  });
+});

@@ -113,6 +113,26 @@
 | TOOL-04 | `PATCH /tools/:id` | 管理者 | name、categoryId、stockQuantity、displayOrder更新 |
 | TOOL-05 | `PATCH /tools/:id/status` | 管理者 | 利用停止・再有効化 |
 
+`GET /tools`は共通ページング形式に加え、絞り込みと管理フォームで使用する全カテゴリの選択肢を`categories`へ返す。現在ページに道具がないカテゴリも選べるよう、道具の`items`とは独立して返す。
+
+```json
+{
+  "items": [],
+  "categories": [
+    {
+      "id": "uuid",
+      "name": "清掃",
+      "categoryType": "WORK",
+      "status": "ACTIVE",
+      "displayOrder": 10
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "total": 0
+}
+```
+
 ```json
 {
   "name": "インパクトドライバー",

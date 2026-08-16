@@ -12,6 +12,11 @@ function createLayoutRouter() {
     routes: [
       { path: '/', name: 'home', component: { template: '<p>ホーム本文</p>' } },
       {
+        path: '/categories',
+        name: 'categories',
+        component: { template: '<p>カテゴリ本文</p>' },
+      },
+      {
         path: '/users',
         name: 'users',
         component: { template: '<p>ユーザー本文</p>' },
@@ -33,7 +38,7 @@ function createLayoutRouter() {
 describe('AppLayout', () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it('管理者だけにユーザー管理ナビゲーションを表示する', async () => {
+  it('管理者だけに管理ナビゲーションを表示する', async () => {
     const authStore = useAuthStore();
     authStore.applySession({
       accessToken: 'admin-token',
@@ -53,6 +58,9 @@ describe('AppLayout', () => {
 
     expect(
       screen.getAllByRole('link', { name: 'ユーザー管理' }),
+    ).not.toHaveLength(0);
+    expect(
+      screen.getAllByRole('link', { name: '作業カテゴリ管理' }),
     ).not.toHaveLength(0);
   });
 
@@ -76,6 +84,9 @@ describe('AppLayout', () => {
 
     expect(
       screen.queryByRole('link', { name: 'ユーザー管理' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: '作業カテゴリ管理' }),
     ).not.toBeInTheDocument();
   });
 });

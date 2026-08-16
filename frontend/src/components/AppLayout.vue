@@ -79,6 +79,13 @@ async function handleLogout(): Promise<void> {
           </RouterLink>
           <RouterLink
             v-if="authStore.user?.role === 'ADMIN'"
+            :to="{ name: 'categories' }"
+            class="rounded-xl px-4 py-3 text-sm font-bold text-[#49666a] transition hover:bg-[#d8eee8] hover:text-[#074d47]"
+          >
+            作業カテゴリ管理
+          </RouterLink>
+          <RouterLink
+            v-if="authStore.user?.role === 'ADMIN'"
             :to="{ name: 'users' }"
             class="rounded-xl px-4 py-3 text-sm font-bold text-[#49666a] transition hover:bg-[#d8eee8] hover:text-[#074d47]"
           >
@@ -138,6 +145,13 @@ async function handleLogout(): Promise<void> {
         >
         <RouterLink
           v-if="authStore.user?.role === 'ADMIN'"
+          :to="{ name: 'categories' }"
+          class="block min-h-11 rounded-xl px-3 py-2.5 font-bold"
+          @click="mobileMenuOpen = false"
+          >作業カテゴリ管理</RouterLink
+        >
+        <RouterLink
+          v-if="authStore.user?.role === 'ADMIN'"
           :to="{ name: 'users' }"
           class="block min-h-11 rounded-xl px-3 py-2.5 font-bold"
           @click="mobileMenuOpen = false"
@@ -163,6 +177,13 @@ async function handleLogout(): Promise<void> {
     <div class="mx-auto flex max-w-7xl">
       <aside class="hidden w-64 shrink-0 px-6 py-8 md:block">
         <nav class="space-y-2" aria-label="アカウントメニュー">
+          <RouterLink
+            v-if="authStore.user?.role === 'ADMIN'"
+            :to="{ name: 'categories' }"
+            class="block rounded-xl px-4 py-3 text-sm font-bold text-[#49666a] hover:bg-[#e8eee9]"
+          >
+            作業カテゴリ管理
+          </RouterLink>
           <RouterLink
             v-if="authStore.user?.role === 'ADMIN'"
             :to="{ name: 'users' }"

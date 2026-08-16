@@ -7,6 +7,7 @@ import {
 } from 'vue-router';
 
 import AppLayout from '../components/AppLayout.vue';
+import CategoriesView from '../views/CategoriesView.vue';
 import { useAuthStore } from '../stores/auth';
 import ForbiddenView from '../views/ForbiddenView.vue';
 import HomeView from '../views/HomeView.vue';
@@ -72,6 +73,12 @@ export function createAppRouter(
             path: 'password',
             name: 'password-change',
             component: PasswordChangeView,
+          },
+          {
+            path: 'categories',
+            name: 'categories',
+            component: CategoriesView,
+            meta: { roles: ['ADMIN'] },
           },
           {
             path: 'users',

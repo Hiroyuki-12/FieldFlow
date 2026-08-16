@@ -78,6 +78,18 @@ describe('Router Guard', () => {
     expect(router.currentRoute.value.name).toBe('forbidden');
   });
 
+  it('作業者が作業カテゴリ管理Routeへ直アクセスしても403へ案内する', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.applySession(normalSession);
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push('/categories');
+
+    expect(router.currentRoute.value.name).toBe('forbidden');
+  });
+
   it('外部URL形式をログイン後の戻り先に採用しない', () => {
     expect(sanitizeInternalRedirect('/password')).toBe('/password');
     expect(sanitizeInternalRedirect('//attacker.example')).toBeNull();

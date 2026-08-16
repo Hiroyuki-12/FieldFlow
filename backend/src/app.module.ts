@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from './auth/auth.module';
+import { CategoriesModule } from './categories/categories.module';
 import { environmentValidationSchema } from './config/environment.schema';
 import { createTypeOrmOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
@@ -30,6 +31,7 @@ import { UsersModule } from './users/users.module';
     }),
     // 機能ごとに閉じたModuleを読み込み、ルートModuleから利用できるようにする。
     AuthModule,
+    CategoriesModule,
     HealthModule,
     UsersModule,
   ],

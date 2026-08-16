@@ -33,6 +33,9 @@
 
 - [MVP実装計画](implementation-plan.md)
 - [ロードマップ4 Backend認証・認可 実装計画](plans/roadmap-04-backend-auth.md)
+- [ロードマップ5 Frontend認証・共通UI 実装計画](plans/roadmap-05-frontend-auth-ui.md)
+- [ロードマップ6 ユーザー管理 実装計画](plans/roadmap-06-user-management.md)
+- [ロードマップ7 作業カテゴリ管理 実装計画](plans/roadmap-07-category-management.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係

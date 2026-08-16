@@ -90,6 +90,18 @@ describe('Router Guard', () => {
     expect(router.currentRoute.value.name).toBe('forbidden');
   });
 
+  it('作業者も道具Routeを閲覧できる', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.applySession(normalSession);
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push('/tools');
+
+    expect(router.currentRoute.value.name).toBe('tools');
+  });
+
   it('外部URL形式をログイン後の戻り先に採用しない', () => {
     expect(sanitizeInternalRedirect('/password')).toBe('/password');
     expect(sanitizeInternalRedirect('//attacker.example')).toBeNull();

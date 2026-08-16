@@ -15,6 +15,7 @@ import LoginView from '../views/LoginView.vue';
 import NotFoundView from '../views/NotFoundView.vue';
 import PasswordChangeView from '../views/PasswordChangeView.vue';
 import SessionExpiredView from '../views/SessionExpiredView.vue';
+import ToolsView from '../views/ToolsView.vue';
 import UsersView from '../views/UsersView.vue';
 
 /** 外部URL形式を戻り先に採用せず、ログイン後のOpen Redirectを防ぐ。 */
@@ -73,6 +74,11 @@ export function createAppRouter(
             path: 'password',
             name: 'password-change',
             component: PasswordChangeView,
+          },
+          {
+            path: 'tools',
+            name: 'tools',
+            component: ToolsView,
           },
           {
             path: 'categories',

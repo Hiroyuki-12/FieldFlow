@@ -7,6 +7,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { environmentValidationSchema } from './config/environment.schema';
 import { createTypeOrmOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
+import { ToolsModule } from './tools/tools.module';
 import { UsersModule } from './users/users.module';
 
 /**
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     CategoriesModule,
     HealthModule,
+    ToolsModule,
     UsersModule,
   ],
 })

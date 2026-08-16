@@ -13,7 +13,8 @@
 - Frontend・BackendのGitHub Actions CI基盤は実装済み。
 - TypeORM Entity、初回Migration、初期Seed、Testcontainersによる業務DB基盤は実装済み。
 - Backend認証・認可API、Refreshローテーション、共通Guardは実装済み。
-- Frontend認証、その他の業務API、業務画面、E2E、性能試験、AWSリソースは未実装。
+- Frontend認証、共通レイアウト、Router Guard、Refresh一重化は実装済み。
+- ユーザー管理以降の業務API・業務画面、E2E、性能試験、AWSリソースは未実装。
 - モックは画面構成と操作フローの基準として残し、本実装ではVueコンポーネントとAPI通信へ置き換える。
 
 ## 3. 実装方針

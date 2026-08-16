@@ -14,10 +14,13 @@ import LoginView from '../views/LoginView.vue';
 import NotFoundView from '../views/NotFoundView.vue';
 import PasswordChangeView from '../views/PasswordChangeView.vue';
 import SessionExpiredView from '../views/SessionExpiredView.vue';
+import UsersView from '../views/UsersView.vue';
 
 /** 外部URL形式を戻り先に採用せず、ログイン後のOpen Redirectを防ぐ。 */
 export function sanitizeInternalRedirect(value: unknown): string | null {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//')
+  return typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.startsWith('//')
     ? value
     : null;
 }
@@ -44,7 +47,11 @@ export function createAppRouter(
         path: '/change-password/initial',
         name: 'initial-password-change',
         component: PasswordChangeView,
-        meta: { requiresAuth: true, allowBeforePasswordChange: true, initialPasswordOnly: true },
+        meta: {
+          requiresAuth: true,
+          allowBeforePasswordChange: true,
+          initialPasswordOnly: true,
+        },
       },
       {
         path: '/session-expired',
@@ -65,6 +72,12 @@ export function createAppRouter(
             path: 'password',
             name: 'password-change',
             component: PasswordChangeView,
+          },
+          {
+            path: 'users',
+            name: 'users',
+            component: UsersView,
+            meta: { roles: ['ADMIN'] },
           },
           {
             path: 'forbidden',

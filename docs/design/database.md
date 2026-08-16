@@ -122,7 +122,7 @@ erDiagram
 | auth_version | `int unsigned` default 1 | 全端末のAccess Token失効判定 |
 | failed_login_count | `int unsigned` default 0 | ログイン制限用 |
 | locked_until | `datetime(6)` null | 一時制限終了時刻 |
-| version | `int unsigned` default 1 | 楽観ロック |
+| version | `int unsigned` default 1 | ユーザー管理画面で変更する項目の楽観ロック。ログイン失敗回数など認証内部の更新では加算しない |
 | created_at / updated_at | `datetime(6)` | 監査日時 |
 
 ### refresh_sessions

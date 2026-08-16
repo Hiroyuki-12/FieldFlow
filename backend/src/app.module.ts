@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { environmentValidationSchema } from './config/environment.schema';
 import { createTypeOrmOptions } from './database/typeorm.config';
 import { HealthModule } from './health/health.module';
+import { UsersModule } from './users/users.module';
 
 /**
  * FieldFlow Backend全体のルートModule。
@@ -30,6 +31,7 @@ import { HealthModule } from './health/health.module';
     // 機能ごとに閉じたModuleを読み込み、ルートModuleから利用できるようにする。
     AuthModule,
     HealthModule,
+    UsersModule,
   ],
 })
 export class AppModule {}

@@ -8,6 +8,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number | null,
+    public readonly code: string | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -30,7 +31,10 @@ export function toApiError(error: unknown): ApiError {
   }
 
   if (!axios.isAxiosError(error)) {
-    return new ApiError('予期しないエラーが発生しました。もう一度お試しください。', null);
+    return new ApiError(
+      '予期しないエラーが発生しました。もう一度お試しください。',
+      null,
+    );
   }
 
   const status = error.response?.status ?? null;
@@ -41,8 +45,18 @@ export function toApiError(error: unknown): ApiError {
     );
   }
 
+  const data = error.response?.data;
+  const code =
+    typeof data === 'object' &&
+    data !== null &&
+    'code' in data &&
+    typeof data.code === 'string'
+      ? data.code
+      : null;
   return new ApiError(
-    statusMessages[status] ?? '処理を完了できませんでした。もう一度お試しください。',
+    statusMessages[status] ??
+      '処理を完了できませんでした。もう一度お試しください。',
     status,
+    code,
   );
 }

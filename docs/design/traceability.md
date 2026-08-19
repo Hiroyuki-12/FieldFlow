@@ -19,6 +19,8 @@
 | REQ-CHECK-04 | 時間帯への作業カテゴリ追加 | SCR-11 | CHECK-04 | daily_checklist_period_categories, daily_checklist_items | IT-CHECK, E2E-CHECK-02 |
 | REQ-CHECK-05 | 過去日閲覧のみ | SCR-10,11 | CHECK-01〜04 | work_date | UT/IT-CHECK, E2E-CHECK-03 |
 | REQ-CHECK-06 | 同時更新検知 | SCR-11 | CHECK-03 | version | IT-CHECK |
+| REQ-CHECK-07 | 今日・未来日の設定修正と旧版保持 | SCR-11 | CHECK-05 | daily_checklists.status/version, periods/items | UT/IT-CHECK, E2E-CHECK-04 |
+| REQ-CHECK-08 | 今日・未来日の表削除・同日再作成 | SCR-11 | CHECK-06 | daily_checklists.status/active_work_date | UT/IT-CHECK, E2E-CHECK-05 |
 | NFR-PERF-01 | 20同時・p95 500ms | — | AUTH/TOOL/CHECK | index全般 | PERF-CHECK/MASTER |
 | NFR-SEC-01 | RBAC・秘密保護 | 全保護画面 | 全保護API | password/token hash | IT-SEC, E2E-ADMIN-02 |
 | NFR-OPS-01 | requestId・JSONログ | エラー表示 | 全API | — | logging integration |

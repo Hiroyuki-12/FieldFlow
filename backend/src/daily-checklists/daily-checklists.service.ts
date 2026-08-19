@@ -22,6 +22,7 @@ import {
   DailyChecklistItem,
   DailyChecklistPeriod,
   DailyChecklistPeriodCategory,
+  DailyChecklistStatus,
   RecordStatus,
   ScheduleMode,
   Tool,
@@ -35,6 +36,8 @@ import {
   CreateDailyChecklistDto,
   CreateDailyChecklistPeriodDto,
 } from './dto/create-daily-checklist.dto';
+import { CancelDailyChecklistDto } from './dto/cancel-daily-checklist.dto';
+import { UpdateDailyChecklistConfigurationDto } from './dto/update-daily-checklist-configuration.dto';
 
 /** 日別表の取得、方式検証、スナップショット作成、冪等性を担当する業務Service。 */
 @Injectable()
@@ -74,7 +77,9 @@ export class DailyChecklistsService {
         // 同時INSERTはwork_date一意制約へ収束させる。
         const existingHeader = await manager
           .getRepository(DailyChecklist)
-          .findOne({ where: { workDate } });
+          .findOne({
+            where: { workDate, status: DailyChecklistStatus.ACTIVE },
+          });
         if (existingHeader) {
           this.assertSameScheduleMode(existingHeader, dto.scheduleMode);
           return this.loadRequiredByDate(manager, workDate);
@@ -99,11 +104,74 @@ export class DailyChecklistsService {
     }
   }
 
+  /**
+   * 現行版を履歴化して新しい版を作る。既存行を上書きしないため、変更前の設定と入力値を追跡できる。
+   */
+  async updateConfiguration(
+    workDate: string,
+    dto: UpdateDailyChecklistConfigurationDto,
+    changedByUserId: string,
+  ): Promise<DailyChecklistResponse> {
+    this.assertPeriodStructure(dto);
+    this.assertEditableDate(workDate);
+
+    const checklist = await this.dataSource.transaction(async (manager) => {
+      const currentHeader = await this.lockActiveHeader(manager, workDate);
+      this.assertCurrentRevision(currentHeader, dto.checklistId, dto.version);
+      const current = await this.loadRequiredById(manager, currentHeader.id);
+      this.assertDataLossConfirmed(
+        current,
+        dto.confirmDataLoss,
+        'CHECKLIST_RECONFIGURATION_DATA_LOSS',
+      );
+
+      // 新版で同じ時間帯・同じ道具が残る場合だけ、入力済みの数量と準備状態を引き継ぐ。
+      const preservedItems = new Map(
+        current.periods.flatMap((period) =>
+          period.items.map(
+            (item) =>
+              [this.itemPreservationKey(period.period, item.sourceToolId), item] as const,
+          ),
+        ),
+      );
+      await this.cancelHeader(manager, currentHeader, changedByUserId);
+      return this.createSnapshot(
+        manager,
+        workDate,
+        dto,
+        changedByUserId,
+        preservedItems,
+      );
+    });
+    return this.toResponse(checklist);
+  }
+
+  /** 利用者には削除と見せるが、現行版をCANCELLEDへ変えて入力内容を履歴として保持する。 */
+  async cancel(
+    workDate: string,
+    dto: CancelDailyChecklistDto,
+    cancelledByUserId: string,
+  ): Promise<void> {
+    this.assertEditableDate(workDate);
+    await this.dataSource.transaction(async (manager) => {
+      const currentHeader = await this.lockActiveHeader(manager, workDate);
+      this.assertCurrentRevision(currentHeader, dto.checklistId, dto.version);
+      const current = await this.loadRequiredById(manager, currentHeader.id);
+      this.assertDataLossConfirmed(
+        current,
+        dto.confirmDataLoss,
+        'CHECKLIST_CANCELLATION_DATA_LOSS',
+      );
+      await this.cancelHeader(manager, currentHeader, cancelledByUserId);
+    });
+  }
+
   private async createSnapshot(
     manager: EntityManager,
     workDate: string,
     dto: CreateDailyChecklistDto,
     createdByUserId: string,
+    preservedItems = new Map<string, DailyChecklistItem>(),
   ): Promise<DailyChecklistGraph> {
     const requestedCategoryIds = [
       ...new Set(dto.periods.flatMap((period) => period.categoryIds)),
@@ -137,8 +205,12 @@ export class DailyChecklistsService {
     const checklist = manager.getRepository(DailyChecklist).create({
       id: randomUUID(),
       workDate,
+      activeWorkDate: workDate,
       scheduleMode: dto.scheduleMode,
+      status: DailyChecklistStatus.ACTIVE,
       createdByUserId,
+      cancelledByUserId: null,
+      cancelledAt: null,
     });
     await manager.getRepository(DailyChecklist).save(checklist);
 
@@ -151,6 +223,7 @@ export class DailyChecklistsService {
         categoryById,
         commonCategories[0],
         toolsByCategory,
+        preservedItems,
       );
     }
     return this.loadRequiredByDate(manager, workDate);
@@ -163,6 +236,7 @@ export class DailyChecklistsService {
     categoryById: Map<string, Category>,
     commonCategory: Category,
     toolsByCategory: Map<string, Tool[]>,
+    preservedItems: Map<string, DailyChecklistItem>,
   ): Promise<void> {
     const period = manager.getRepository(DailyChecklistPeriod).create({
       id: randomUUID(),
@@ -194,19 +268,28 @@ export class DailyChecklistsService {
       commonCategory,
     ].filter((category): category is Category => Boolean(category));
     const items = snapshotCategories.flatMap((category) =>
-      (toolsByCategory.get(category.id) ?? []).map((tool) =>
-        manager.getRepository(DailyChecklistItem).create({
+      (toolsByCategory.get(category.id) ?? []).map((tool) => {
+        const preserved = preservedItems.get(
+          this.itemPreservationKey(requestedPeriod.period, tool.id),
+        );
+        // 在庫上限が下がって旧数量を保存できない場合は、DB制約違反にせず未設定へ戻す。
+        const canPreserveQuantity =
+          preserved !== undefined &&
+          preserved.takeoutQuantity <= tool.stockQuantity;
+        return manager.getRepository(DailyChecklistItem).create({
           id: randomUUID(),
           periodId: period.id,
           sourceToolId: tool.id,
           toolNameSnapshot: tool.name,
           categoryNameSnapshot: category.name,
           stockQuantitySnapshot: tool.stockQuantity,
-          takeoutQuantity: 0,
-          checked: false,
+          takeoutQuantity: canPreserveQuantity
+            ? preserved.takeoutQuantity
+            : 0,
+          checked: canPreserveQuantity ? preserved.checked : false,
           displayOrderSnapshot: tool.displayOrder,
-        }),
-      ),
+        });
+      }),
     );
     if (items.length > 0) {
       await manager.getRepository(DailyChecklistItem).save(items);
@@ -265,6 +348,90 @@ export class DailyChecklistsService {
     }
   }
 
+  private assertEditableDate(workDate: string): void {
+    if (workDate < this.todayInTokyo()) {
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        code: 'CHECKLIST_PAST_DATE',
+        message: '過去日の日別チェックは変更・削除できません。',
+      });
+    }
+  }
+
+  /** 現行ヘッダーを固定し、同じ表への設定変更・削除を直列化する。 */
+  private async lockActiveHeader(
+    manager: EntityManager,
+    workDate: string,
+  ): Promise<DailyChecklist> {
+    const checklist = await manager
+      .getRepository(DailyChecklist)
+      .createQueryBuilder('checklist')
+      .setLock('pessimistic_write')
+      .where('checklist.workDate = :workDate', { workDate })
+      .andWhere('checklist.status = :status', {
+        status: DailyChecklistStatus.ACTIVE,
+      })
+      .getOne();
+    if (!checklist) this.throwChecklistNotFound();
+    return checklist;
+  }
+
+  private assertCurrentRevision(
+    checklist: DailyChecklist,
+    requestedId: string,
+    requestedVersion: number,
+  ): void {
+    if (
+      checklist.id !== requestedId ||
+      checklist.version !== requestedVersion
+    ) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'CHECKLIST_UPDATE_CONFLICT',
+        message:
+          '他の利用者が先に日別チェックを変更しました。最新の状態を確認してください。',
+      });
+    }
+  }
+
+  private assertDataLossConfirmed(
+    checklist: DailyChecklistGraph,
+    confirmed: boolean,
+    code: string,
+  ): void {
+    const enteredItemCount = checklist.periods
+      .flatMap((period) => period.items)
+      .filter((item) => item.takeoutQuantity > 0 || item.checked).length;
+    if (enteredItemCount > 0 && !confirmed) {
+      throw new ConflictException({
+        statusCode: 409,
+        code,
+        message: '入力済みの持ち出し数・準備状態があります。',
+        details: { enteredItemCount },
+      });
+    }
+  }
+
+  private async cancelHeader(
+    manager: EntityManager,
+    checklist: DailyChecklist,
+    cancelledByUserId: string,
+  ): Promise<void> {
+    checklist.status = DailyChecklistStatus.CANCELLED;
+    // NULLは一意制約上複数保持できるため、同日の新しいACTIVE版を作成可能にする。
+    checklist.activeWorkDate = null;
+    checklist.cancelledByUserId = cancelledByUserId;
+    checklist.cancelledAt = new Date();
+    await manager.getRepository(DailyChecklist).save(checklist);
+  }
+
+  private itemPreservationKey(
+    period: ChecklistPeriodType,
+    sourceToolId: string,
+  ): string {
+    return `${period}:${sourceToolId}`;
+  }
+
   private assertRequestedCategories(
     categoryIds: string[],
     categoryById: Map<string, Category>,
@@ -319,12 +486,29 @@ export class DailyChecklistsService {
     return checklist;
   }
 
+  private async loadRequiredById(
+    manager: EntityManager,
+    id: string,
+  ): Promise<DailyChecklistGraph> {
+    const checklist = await manager.getRepository(DailyChecklist).findOne({
+      where: { id },
+      relations: {
+        periods: {
+          categories: true,
+          items: true,
+        },
+      },
+    });
+    if (!checklist) this.throwChecklistNotFound();
+    return checklist;
+  }
+
   private async loadByDate(
     manager: EntityManager,
     workDate: string,
   ): Promise<DailyChecklistGraph | null> {
     const checklist = await manager.getRepository(DailyChecklist).findOne({
-      where: { workDate },
+      where: { workDate, status: DailyChecklistStatus.ACTIVE },
       relations: {
         periods: {
           categories: true,

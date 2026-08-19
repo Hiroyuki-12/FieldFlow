@@ -102,6 +102,19 @@ describe('Router Guard', () => {
     expect(router.currentRoute.value.name).toBe('tools');
   });
 
+  it('作業者も指定日の日別チェックRouteを閲覧できる', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const authStore = useAuthStore(pinia);
+    authStore.applySession(normalSession);
+    const router = createAppRouter(pinia, createMemoryHistory());
+
+    await router.push('/daily-checklists/2026-08-18');
+
+    expect(router.currentRoute.value.name).toBe('daily-checklist');
+    expect(router.currentRoute.value.params.date).toBe('2026-08-18');
+  });
+
   it('外部URL形式をログイン後の戻り先に採用しない', () => {
     expect(sanitizeInternalRedirect('/password')).toBe('/password');
     expect(sanitizeInternalRedirect('//attacker.example')).toBeNull();

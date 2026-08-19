@@ -8,6 +8,7 @@ import {
 
 import AppLayout from '../components/AppLayout.vue';
 import CategoriesView from '../views/CategoriesView.vue';
+import DailyChecklistView from '../views/DailyChecklistView.vue';
 import { useAuthStore } from '../stores/auth';
 import ForbiddenView from '../views/ForbiddenView.vue';
 import HomeView from '../views/HomeView.vue';
@@ -69,6 +70,11 @@ export function createAppRouter(
             path: '',
             name: 'home',
             component: HomeView,
+          },
+          {
+            path: 'daily-checklists/:date',
+            name: 'daily-checklist',
+            component: DailyChecklistView,
           },
           {
             path: 'password',

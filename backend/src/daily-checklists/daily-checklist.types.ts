@@ -34,6 +34,7 @@ export interface DailyChecklistPeriodResponse {
 /** 画面へ返す日別表。作成者など表示不要な内部Relationは公開しない。 */
 export interface DailyChecklistResponse {
   id: string;
+  version: number;
   workDate: string;
   scheduleMode: ScheduleMode;
   editable: boolean;
@@ -62,6 +63,7 @@ export function toDailyChecklistResponse(
 ): DailyChecklistResponse {
   return {
     id: checklist.id,
+    version: checklist.version,
     workDate: checklist.workDate,
     scheduleMode: checklist.scheduleMode,
     editable: checklist.workDate >= today,

@@ -12,6 +12,11 @@ function createLayoutRouter() {
     routes: [
       { path: '/', name: 'home', component: { template: '<p>ホーム本文</p>' } },
       {
+        path: '/daily-checklists/:date',
+        name: 'daily-checklist',
+        component: { template: '<p>日別チェック本文</p>' },
+      },
+      {
         path: '/tools',
         name: 'tools',
         component: { template: '<p>道具本文</p>' },
@@ -70,6 +75,9 @@ describe('AppLayout', () => {
     expect(screen.getAllByRole('link', { name: '道具管理' })).not.toHaveLength(
       0,
     );
+    expect(
+      screen.getAllByRole('link', { name: '日別チェック' }),
+    ).not.toHaveLength(0);
   });
 
   it('作業者へ管理ナビゲーションを表示しない', async () => {
@@ -99,5 +107,8 @@ describe('AppLayout', () => {
     expect(screen.getAllByRole('link', { name: '道具管理' })).not.toHaveLength(
       0,
     );
+    expect(
+      screen.getAllByRole('link', { name: '日別チェック' }),
+    ).not.toHaveLength(0);
   });
 });

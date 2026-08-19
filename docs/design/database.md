@@ -141,9 +141,12 @@ erDiagram
 
 ### daily_checklists
 
-- `work_date unique`により1日1件のヘッダーを保証する。
-- `schedule_mode`は`FULL_DAY`または`SPLIT`とし、作成後は変更しない。
+- `status`は`ACTIVE`または`CANCELLED`とし、変更・削除前の版を物理削除しない。
+- `ACTIVE`では`active_work_date=work_date`、`CANCELLED`では`active_work_date=NULL`とするCHECK制約を持つ。`active_work_date unique`により、取消履歴を複数残しながら現行版だけを1日1件へ限定する。
+- `schedule_mode`は`FULL_DAY`または`SPLIT`とする。設定変更では既存行を上書きせず、旧版を`CANCELLED`にして新しい`ACTIVE`行を作成する。
 - `created_by_user_id`は作成者の管理情報であり、誰が各チェックを変更したかを示す業務履歴ではない。
+- `cancelled_by_user_id`と`cancelled_at`は、設定変更または削除で旧版を取り消した利用者と時刻を保持する。
+- ヘッダーの`version`は設定変更・削除の競合検知に使い、画面が取得した`id`・`version`と現行版が一致するときだけ処理する。
 - ユーザー利用停止後も参照を残すため`ON DELETE RESTRICT`とする。
 
 ### daily_checklist_periods
@@ -172,6 +175,8 @@ erDiagram
 - `SPLIT`は午前・午後の両方を同じトランザクションで作成し、片方だけが残る状態を作らない。
 - 作業カテゴリ追加は時間帯カテゴリと対象道具を同じトランザクションで追加する。
 - 同時生成で一意制約に負けた処理はロールバックし、既存表を取得して正常応答する。
+- 設定変更は現行ヘッダーを悲観ロックし、旧版の取消と新版スナップショット作成を同じトランザクションで行う。
+- 表の削除は現行ヘッダーを悲観ロックして`CANCELLED`へ更新し、子の時間帯・カテゴリ・項目は削除しない。
 - 数量0への変更とチェック解除は1回のUPDATEで行う。
 - カテゴリ停止判定、最後の管理者判定はトランザクション内で対象をロックしてから更新する。
 

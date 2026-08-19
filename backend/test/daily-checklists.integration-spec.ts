@@ -32,6 +32,7 @@ interface LoginBody {
 
 interface ChecklistBody {
   id: string;
+  version: number;
   workDate: string;
   scheduleMode: ScheduleMode;
   editable: boolean;
@@ -56,7 +57,9 @@ interface ChecklistBody {
 }
 
 interface AuthenticatedRequestBuilder {
+  delete: (path: string) => request.Test;
   get: (path: string) => request.Test;
+  patch: (path: string) => request.Test;
   put: (path: string) => request.Test;
 }
 
@@ -128,6 +131,13 @@ describe('Daily checklists API (integration)', () => {
     app = moduleFixture.createNestApplication();
     configureApp(app);
     await app.init();
+    // Access Tokenは各テストで再利用し、ログイン回数がRate Limitの検証条件へ干渉しないようにする。
+    adminToken = (
+      (await login('admin01', adminPassword).expect(200)).body as LoginBody
+    ).accessToken;
+    workerToken = (
+      (await login('worker01', workerPassword).expect(200)).body as LoginBody
+    ).accessToken;
   });
 
   beforeEach(async () => {
@@ -142,12 +152,6 @@ describe('Daily checklists API (integration)', () => {
     await dataSource.query('DELETE FROM tools');
     await resetCategories();
     await insertTools();
-    adminToken = (
-      (await login('admin01', adminPassword).expect(200)).body as LoginBody
-    ).accessToken;
-    workerToken = (
-      (await login('worker01', workerPassword).expect(200)).body as LoginBody
-    ).accessToken;
   });
 
   afterAll(async () => {
@@ -386,8 +390,10 @@ describe('Daily checklists API (integration)', () => {
       .send(fullDayBody(cleaningId))
       .expect(200);
     await dataSource.query(
-      'UPDATE daily_checklists SET work_date = ? WHERE work_date = ?',
-      [pastDate, futureDate],
+      `UPDATE daily_checklists
+       SET work_date = ?, active_work_date = ?
+       WHERE work_date = ?`,
+      [pastDate, pastDate, futureDate],
     );
     await authenticatedRequest(adminToken)
       .get(`/api/v1/daily-checklists/${pastDate}`)
@@ -458,6 +464,166 @@ describe('Daily checklists API (integration)', () => {
         'SELECT COUNT(*) AS count FROM daily_checklist_periods',
       ),
     ).toEqual([{ count: '1' }]);
+  });
+
+  it('設定変更前の表を履歴化し、同じ時間帯・道具の入力値だけを新版へ引き継ぐ', async () => {
+    const workDate = dateInTokyo(8);
+    const created = await authenticatedRequest(workerToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const original = created.body as ChecklistBody;
+    const originalGloves = original.periods[0].items.find(
+      (item) => item.sourceToolId === glovesId,
+    );
+    const originalMop = original.periods[0].items.find(
+      (item) => item.sourceToolId === mopId,
+    );
+    await dataSource.query(
+      'UPDATE daily_checklist_items SET takeout_quantity = 1, checked = true WHERE id IN (?, ?)',
+      [originalGloves?.id, originalMop?.id],
+    );
+
+    const updateBody = {
+      ...fullDayBody(inspectionId),
+      checklistId: original.id,
+      version: original.version,
+      confirmDataLoss: false,
+    };
+    await authenticatedRequest(workerToken)
+      .patch(`/api/v1/daily-checklists/${workDate}/configuration`)
+      .send(updateBody)
+      .expect(409)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_RECONFIGURATION_DATA_LOSS');
+      });
+
+    const changed = await authenticatedRequest(workerToken)
+      .patch(`/api/v1/daily-checklists/${workDate}/configuration`)
+      .send({ ...updateBody, confirmDataLoss: true })
+      .expect(200);
+    const current = changed.body as ChecklistBody;
+
+    expect(current.id).not.toBe(original.id);
+    expect(current.periods[0].categories[0].sourceCategoryId).toBe(
+      inspectionId,
+    );
+    expect(current.periods[0].items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceToolId: glovesId,
+          takeoutQuantity: 1,
+          checked: true,
+        }),
+        expect.objectContaining({
+          sourceToolId: testerId,
+          takeoutQuantity: 0,
+          checked: false,
+        }),
+      ]),
+    );
+    expect(
+      current.periods[0].items.some((item) => item.sourceToolId === mopId),
+    ).toBe(false);
+    expect(
+      await dataSource.query<Array<{ status: string; count: string }>>(
+        'SELECT status, COUNT(*) AS count FROM daily_checklists WHERE work_date = ? GROUP BY status ORDER BY status',
+        [workDate],
+      ),
+    ).toEqual([
+      { status: 'ACTIVE', count: '1' },
+      { status: 'CANCELLED', count: '1' },
+    ]);
+    expect(
+      await dataSource.query<Array<{ takeoutQuantity: number }>>(
+        `SELECT item.takeout_quantity AS takeoutQuantity
+         FROM daily_checklist_items item
+         INNER JOIN daily_checklist_periods period ON period.id = item.period_id
+         WHERE period.checklist_id = ? AND item.source_tool_id = ?`,
+        [original.id, mopId],
+      ),
+    ).toEqual([{ takeoutQuantity: 1 }]);
+  });
+
+  it('チェック表を論理削除して取得対象外にし、同じ日へ作り直せる', async () => {
+    const workDate = dateInTokyo(9);
+    const created = await authenticatedRequest(adminToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const original = created.body as ChecklistBody;
+
+    await dataSource.query(
+      `UPDATE daily_checklist_items
+       SET takeout_quantity = 1, checked = true
+       WHERE id = ?`,
+      [original.periods[0].items[0].id],
+    );
+    await authenticatedRequest(adminToken)
+      .delete(`/api/v1/daily-checklists/${workDate}`)
+      .send({
+        checklistId: original.id,
+        version: original.version,
+        confirmDataLoss: false,
+      })
+      .expect(409)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_CANCELLATION_DATA_LOSS');
+      });
+
+    await authenticatedRequest(adminToken)
+      .delete(`/api/v1/daily-checklists/${workDate}`)
+      .send({
+        checklistId: original.id,
+        version: original.version,
+        confirmDataLoss: true,
+      })
+      .expect(204);
+    await authenticatedRequest(workerToken)
+      .get(`/api/v1/daily-checklists/${workDate}`)
+      .expect(404);
+
+    const recreated = await authenticatedRequest(workerToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(inspectionId))
+      .expect(200);
+    expect((recreated.body as ChecklistBody).id).not.toBe(original.id);
+    expect(
+      await dataSource.query<Array<{ status: string; cancelledBy: string }>>(
+        `SELECT status, cancelled_by_user_id AS cancelledBy
+         FROM daily_checklists WHERE id = ?`,
+        [original.id],
+      ),
+    ).toEqual([{ status: 'CANCELLED', cancelledBy: adminId }]);
+  });
+
+  it('古いチェック表ID・versionによる設定変更と削除を409で拒否する', async () => {
+    const workDate = dateInTokyo(10);
+    const created = await authenticatedRequest(workerToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const original = created.body as ChecklistBody;
+    const stale = {
+      checklistId: original.id,
+      version: original.version + 1,
+      confirmDataLoss: true,
+    };
+
+    await authenticatedRequest(workerToken)
+      .patch(`/api/v1/daily-checklists/${workDate}/configuration`)
+      .send({ ...fullDayBody(inspectionId), ...stale })
+      .expect(409)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_UPDATE_CONFLICT');
+      });
+    await authenticatedRequest(workerToken)
+      .delete(`/api/v1/daily-checklists/${workDate}`)
+      .send(stale)
+      .expect(409)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_UPDATE_CONFLICT');
+      });
   });
 
   async function insertBaselineData(): Promise<void> {
@@ -568,8 +734,12 @@ describe('Daily checklists API (integration)', () => {
     const withToken = (test: request.Test): request.Test =>
       test.set('Authorization', `Bearer ${token}`);
     return {
+      delete: (path) =>
+        withToken(request(app.getHttpServer() as Server).delete(path)),
       get: (path) =>
         withToken(request(app.getHttpServer() as Server).get(path)),
+      patch: (path) =>
+        withToken(request(app.getHttpServer() as Server).patch(path)),
       put: (path) =>
         withToken(request(app.getHttpServer() as Server).put(path)),
     };

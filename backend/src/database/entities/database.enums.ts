@@ -22,6 +22,12 @@ export enum ScheduleMode {
   SPLIT = 'SPLIT',
 }
 
+/** 日別表の現行版と、変更・削除により履歴化された版を区別する。 */
+export enum DailyChecklistStatus {
+  ACTIVE = 'ACTIVE',
+  CANCELLED = 'CANCELLED',
+}
+
 /** 日別チェック内の時間帯。scheduleModeとの整合性はService層でも検証する。 */
 export enum ChecklistPeriodType {
   FULL_DAY = 'FULL_DAY',

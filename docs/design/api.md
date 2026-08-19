@@ -150,6 +150,8 @@
 | CHECK-02 | `PUT /daily-checklists/:date` | 全ユーザー | 作成方式と時間帯別カテゴリを指定して冪等作成・取得 |
 | CHECK-03 | `PATCH /daily-checklists/:date/periods/:period/items/:itemId` | 全ユーザー | 時間帯内の数量・チェック更新 |
 | CHECK-04 | `POST /daily-checklists/:date/periods/:period/categories` | 全ユーザー | 未選択の有効な作業カテゴリと道具を追加 |
+| CHECK-05 | `PATCH /daily-checklists/:date/configuration` | 全ユーザー | 今日・未来日の時間帯・作業内容を新版へ置き換える |
+| CHECK-06 | `DELETE /daily-checklists/:date` | 全ユーザー | 今日・未来日の現行版を取り消し、同日の再作成を可能にする |
 
 作成リクエスト（午前・午後）:
 
@@ -172,6 +174,7 @@
 ```json
 {
   "id": "uuid",
+  "version": 1,
   "workDate": "2026-07-21",
   "scheduleMode": "SPLIT",
   "editable": true,
@@ -208,6 +211,31 @@
 
 - APIは数量0なら`checked=false`へ正規化する。数量0で`checked=true`を明示した場合は`422`とする。
 - バージョン不一致時は`409`の`details.currentItem`へ最新値を含める。
+
+設定変更リクエストは作成リクエストへ次を追加する。
+
+```json
+{
+  "checklistId": "current-checklist-uuid",
+  "version": 1,
+  "confirmDataLoss": true,
+  "scheduleMode": "FULL_DAY",
+  "periods": [
+    { "period": "FULL_DAY", "categoryIds": ["cleaning-category-uuid"] }
+  ]
+}
+```
+
+削除リクエスト:
+
+```json
+{ "checklistId": "current-checklist-uuid", "version": 1, "confirmDataLoss": true }
+```
+
+- 設定変更は旧版を`CANCELLED`にして新版を作成し、同じ時間帯・同じ道具の入力値だけを引き継ぐ。
+- 入力済み内容があり`confirmDataLoss=false`の場合、設定変更は`409 CHECKLIST_RECONFIGURATION_DATA_LOSS`、削除は`409 CHECKLIST_CANCELLATION_DATA_LOSS`とする。
+- 現行版の`id`または`version`が一致しない場合は`409 CHECKLIST_UPDATE_CONFLICT`とし、別利用者の変更を上書きしない。
+- `DELETE`成功時は204を返す。取消済み版は通常の`GET`対象外だがDBには保持する。
 - カテゴリ追加は`{ "categoryIds": ["uuid"] }`を受け取り、無効・`COMMON`・選択済みカテゴリ、重複道具、過去日を拒否する。
 
 ## 7. ヘルスチェック

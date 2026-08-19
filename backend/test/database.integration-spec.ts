@@ -172,8 +172,8 @@ describe('Database foundation (integration)', () => {
     );
     await dataSource.query(
       `INSERT INTO daily_checklists
-        (id, work_date, schedule_mode, created_by_user_id)
-       VALUES (?, '2026-08-06', 'FULL_DAY', ?)`,
+        (id, work_date, active_work_date, schedule_mode, created_by_user_id)
+       VALUES (?, '2026-08-06', '2026-08-06', 'FULL_DAY', ?)`,
       [checklistId, admin?.id],
     );
     await dataSource.query(
@@ -224,8 +224,8 @@ describe('Database foundation (integration)', () => {
     await expect(
       dataSource.query(
         `INSERT INTO daily_checklists
-          (id, work_date, schedule_mode, created_by_user_id)
-         VALUES (?, '2026-08-06', 'FULL_DAY', ?)`,
+          (id, work_date, active_work_date, schedule_mode, created_by_user_id)
+         VALUES (?, '2026-08-06', '2026-08-06', 'FULL_DAY', ?)`,
         [randomUUID(), admin?.id],
       ),
     ).rejects.toBeDefined();

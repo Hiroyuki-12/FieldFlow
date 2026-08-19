@@ -3,6 +3,7 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import {
   ChecklistPeriodType,
   DailyChecklist,
+  DailyChecklistStatus,
   ScheduleMode,
 } from '../database/entities';
 import type { DailyChecklistGraph } from './daily-checklist.types';
@@ -140,6 +141,30 @@ describe('DailyChecklistsService', () => {
       response: { code: 'CHECKLIST_ALREADY_CONFIGURED' },
     });
   });
+
+  it('過去日の設定変更と削除をTransaction前に拒否する', async () => {
+    const transaction = jest.fn();
+    const service = new DailyChecklistsService(repository, {
+      transaction,
+    } as unknown as DataSource);
+    const revision = {
+      checklistId: '11111111-1111-4111-8111-111111111111',
+      version: 1,
+      confirmDataLoss: true,
+    };
+
+    await expect(
+      service.updateConfiguration(
+        '2000-01-01',
+        { ...fullDayDto(), ...revision },
+        'user-1',
+      ),
+    ).rejects.toMatchObject({ response: { code: 'CHECKLIST_PAST_DATE' } });
+    await expect(
+      service.cancel('2000-01-01', revision, 'user-1'),
+    ).rejects.toMatchObject({ response: { code: 'CHECKLIST_PAST_DATE' } });
+    expect(transaction).not.toHaveBeenCalled();
+  });
 });
 
 function fullDayDto(): CreateDailyChecklistDto {
@@ -161,10 +186,16 @@ function checklistFixture(
     id: 'checklist-1',
     workDate: '2000-01-01',
     scheduleMode: ScheduleMode.FULL_DAY,
+    status: DailyChecklistStatus.ACTIVE,
+    activeWorkDate: '2000-01-01',
     createdByUserId: 'user-1',
+    cancelledByUserId: null,
+    cancelledAt: null,
+    version: 1,
     createdAt: new Date('2000-01-01T00:00:00.000Z'),
     updatedAt: new Date('2000-01-01T00:00:00.000Z'),
     createdByUser: {} as never,
+    cancelledByUser: null,
     periods: [
       {
         id: 'period-1',

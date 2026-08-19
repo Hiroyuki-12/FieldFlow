@@ -17,7 +17,7 @@ describe('createDatabaseDataSource', () => {
     expect(dataSource.options.synchronize).toBe(false);
     expect(dataSource.options.migrationsRun).toBe(false);
     expect(dataSource.options.entities).toHaveLength(8);
-    expect(dataSource.options.migrations).toHaveLength(1);
+    expect(dataSource.options.migrations).toHaveLength(2);
   });
 
   it('DB接続設定が不足している場合は実行前に拒否する', () => {

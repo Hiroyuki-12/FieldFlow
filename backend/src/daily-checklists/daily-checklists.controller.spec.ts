@@ -12,6 +12,8 @@ describe('DailyChecklistsController', () => {
   const dailyChecklistsService = {
     findByDate: jest.fn(),
     createOrGet: jest.fn(),
+    updateItem: jest.fn(),
+    addCategories: jest.fn(),
     updateConfiguration: jest.fn(),
     cancel: jest.fn(),
   };
@@ -79,6 +81,53 @@ describe('DailyChecklistsController', () => {
     expect(
       dailyChecklistsService.updateConfiguration,
     ).toHaveBeenCalledWith('2026-08-19', dto, 'user-1');
+  });
+
+  it('項目更新時に日付・時間帯・項目ID・入力値をServiceへ渡す', async () => {
+    const dto = { takeoutQuantity: 2, checked: true, version: 3 };
+    dailyChecklistsService.updateItem.mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      version: 4,
+    });
+
+    await controller.updateItem(
+      {
+        date: '2026-08-19',
+        period: ChecklistPeriodType.MORNING,
+        itemId: '11111111-1111-4111-8111-111111111111',
+      },
+      dto,
+    );
+
+    expect(dailyChecklistsService.updateItem).toHaveBeenCalledWith(
+      '2026-08-19',
+      ChecklistPeriodType.MORNING,
+      '11111111-1111-4111-8111-111111111111',
+      dto,
+    );
+  });
+
+  it('カテゴリ追加時に日付・時間帯・カテゴリIDをServiceへ渡す', async () => {
+    const dto = {
+      categoryIds: ['11111111-1111-4111-8111-111111111111'],
+    };
+    dailyChecklistsService.addCategories.mockResolvedValue({
+      id: 'checklist-1',
+    });
+
+    await controller.addCategories(
+      {
+        date: '2026-08-19',
+        period: ChecklistPeriodType.AFTERNOON,
+      },
+      dto,
+    );
+
+    expect(dailyChecklistsService.addCategories).toHaveBeenCalledWith(
+      '2026-08-19',
+      ChecklistPeriodType.AFTERNOON,
+      dto,
+    );
   });
 
   it('削除時に現行版と明示確認をServiceへ渡す', async () => {

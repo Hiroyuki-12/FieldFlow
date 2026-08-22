@@ -9,6 +9,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number | null,
     public readonly code: string | null = null,
+    // 画面復旧に必要な公開情報だけを保持する。呼び出し側は必ず型を検証して利用する。
+    public readonly details: unknown = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -53,10 +55,15 @@ export function toApiError(error: unknown): ApiError {
     typeof data.code === 'string'
       ? data.code
       : null;
+  const details =
+    typeof data === 'object' && data !== null && 'details' in data
+      ? data.details
+      : null;
   return new ApiError(
     statusMessages[status] ??
       '処理を完了できませんでした。もう一度お試しください。',
     status,
     code,
+    details,
   );
 }

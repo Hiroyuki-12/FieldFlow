@@ -165,6 +165,28 @@ describe('DailyChecklistsService', () => {
     ).rejects.toMatchObject({ response: { code: 'CHECKLIST_PAST_DATE' } });
     expect(transaction).not.toHaveBeenCalled();
   });
+
+  it('過去日の項目更新とカテゴリ追加をTransaction前に拒否する', async () => {
+    const transaction = jest.fn();
+    const service = new DailyChecklistsService(repository, {
+      transaction,
+    } as unknown as DataSource);
+
+    await expect(
+      service.updateItem(
+        '2000-01-01',
+        ChecklistPeriodType.FULL_DAY,
+        '11111111-1111-4111-8111-111111111111',
+        { takeoutQuantity: 1, checked: true, version: 1 },
+      ),
+    ).rejects.toMatchObject({ response: { code: 'CHECKLIST_PAST_DATE' } });
+    await expect(
+      service.addCategories('2000-01-01', ChecklistPeriodType.FULL_DAY, {
+        categoryIds: ['11111111-1111-4111-8111-111111111111'],
+      }),
+    ).rejects.toMatchObject({ response: { code: 'CHECKLIST_PAST_DATE' } });
+    expect(transaction).not.toHaveBeenCalled();
+  });
 });
 
 function fullDayDto(): CreateDailyChecklistDto {

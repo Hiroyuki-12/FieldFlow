@@ -58,6 +58,16 @@ export interface CancelDailyChecklistInput {
   confirmDataLoss: boolean;
 }
 
+export interface UpdateDailyChecklistItemInput {
+  takeoutQuantity: number;
+  checked: boolean;
+  version: number;
+}
+
+export interface AddDailyChecklistCategoriesInput {
+  categoryIds: string[];
+}
+
 export interface ChecklistCategoryOption {
   id: string;
   name: string;
@@ -77,6 +87,33 @@ export async function createDailyChecklist(
 ): Promise<DailyChecklist> {
   const response = await apiHttpClient.put<DailyChecklist>(
     `/daily-checklists/${date}`,
+    input,
+  );
+  return response.data;
+}
+
+/** 道具1行だけを取得済みversionで更新し、成功後の新しいversionを受け取る。 */
+export async function updateDailyChecklistItem(
+  date: string,
+  period: ChecklistPeriod,
+  itemId: string,
+  input: UpdateDailyChecklistItemInput,
+): Promise<DailyChecklistItem> {
+  const response = await apiHttpClient.patch<DailyChecklistItem>(
+    `/daily-checklists/${date}/periods/${period}/items/${itemId}`,
+    input,
+  );
+  return response.data;
+}
+
+/** 現在の時間帯へ作業カテゴリと有効な道具のスナップショットを一括追加する。 */
+export async function addDailyChecklistCategories(
+  date: string,
+  period: ChecklistPeriod,
+  input: AddDailyChecklistCategoriesInput,
+): Promise<DailyChecklist> {
+  const response = await apiHttpClient.post<DailyChecklist>(
+    `/daily-checklists/${date}/periods/${period}/categories`,
     input,
   );
   return response.data;

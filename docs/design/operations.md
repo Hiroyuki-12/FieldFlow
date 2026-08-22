@@ -2,7 +2,7 @@
 
 ## 1. ログ方針
 
-NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ドライバーでCloudWatch Logsへ送る。業務データの完全な内容ではなく、障害調査とセキュリティ追跡に必要なメタデータを記録する。
+NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環境ではContainerのログ基盤、AWS課題環境ではECSの`awslogs`ドライバーからCloudWatch Logsへ送る。業務データの完全な内容ではなく、障害調査とセキュリティ追跡に必要なメタデータを記録する。
 
 ```json
 {
@@ -39,7 +39,7 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 
 - パスワード、仮パスワード、passwordHash
 - Access/Refresh Token、Authorization、Cookie、JWT鍵
-- DBパスワード、SSM値、Terraform秘密値
+- DBパスワード、Cloudflare Secrets、Aiven認証情報、SSM値、Terraform秘密値
 - リクエスト・レスポンス本文の丸ごと出力
 - loginIdの不要な全文出力。必要時はuserIdを使用する。
 
@@ -47,12 +47,26 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 
 ## 4. requestId
 
-- CloudFront由来のIDや利用者が送った値を採用せず、アプリ入口でUUID v4のrequestIdを必ず生成する。外部入力によるログ汚染とID衝突を防ぐためである。
+- Worker・CloudFrontなどのProxy由来のIDや利用者が送った値を採用せず、アプリ入口でUUID v4のrequestIdを必ず生成する。外部入力によるログ汚染とID衝突を防ぐためである。
 - レスポンスヘッダー`X-Request-Id`とエラー本文に返す。
 - Node.js標準の`AsyncLocalStorage`で伝播し、Controller、Service、DBエラー、認証・管理操作を同じrequestIdで検索できるようにする。
 - アクセスログのpathはRoute Templateを使い、UUID、日付、Query、リクエスト・レスポンス本文を記録しない。
 
 ## 5. 監視とアラーム
+
+### Cloudflare公開環境
+
+| 監視 | 条件の初期値 | 対応 |
+| --- | --- | --- |
+| Worker / Container 5xx | 5分で5件以上 | requestId、起動ログ、直近デプロイ確認 |
+| Container起動失敗 | 1件以上 | イメージ、Secrets、Aiven TLS接続確認 |
+| API latency | p95 1秒超が継続 | cold start、slow API、DB query確認 |
+| Aiven connections | 契約上限80%以上 | connection pool、接続リーク確認 |
+| Aiven storage | 契約上限80%以上 | 容量・不要データ・プラン確認 |
+
+通知方法と実際に取得できる指標はCloudflare・Aiven設定時に確認し、無料枠や契約プランで利用できる範囲を設計書へ追記する。
+
+### AWS課題環境
 
 | 監視 | 条件の初期値 | 対応 |
 | --- | --- | --- |
@@ -68,12 +82,24 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 
 ## 6. 保持・バックアップ
 
-- CloudWatch Logsは30日保持する。学習完了後の費用見直し対象とする。
+- Cloudflare・Aivenのログは利用プランの保持期間を確認し、必要な障害情報とデプロイ時刻をREADMEまたは提出記録へ残す。
+- Aivenは利用プランで提供されるバックアップ・復旧条件を設定時に確認する。無料枠へバックアップ保証を決め打ちしない。
+- CloudWatch Logsは30日保持する。AWS学習完了後の費用見直し対象とする。
 - RDS自動バックアップは7日保持し、暗号化する。
 - 復旧訓練では別DBへ復元し、Migration状態、ログイン、日別表取得を確認する。本番DBを上書きしない。
 - S3 frontendは再ビルド可能な成果物であり、ソースとlockfileを正とする。
 
 ## 7. 障害調査順序
+
+### Cloudflare公開環境
+
+1. Workerの画面・API到達性とHTTPステータスを確認する。
+2. Worker・Containerのデプロイ状態、起動ログ、Secrets設定を確認する。
+3. requestIdでアプリログを検索する。
+4. Aivenの接続数、容量、サービス状態、TLS設定を確認する。
+5. 影響、原因、暫定対応、恒久対応を記録する。
+
+### AWS課題環境
 
 1. CloudFront/ALBのHTTPステータスと到達性を確認する。
 2. ECS Service、Task、Deployment、health状態を確認する。
@@ -81,4 +107,4 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 4. RDS接続数・容量・イベント、SSM/ECR/IAM/SGを確認する。
 5. 影響、原因、暫定対応、恒久対応を記録する。
 
-AWSの作成・更新・停止やTerraform apply/destroyは、対象と影響を説明してユーザー承認後に行う。
+Cloudflare・Aivenのサービス作成・Secrets更新・デプロイ、およびAWSの作成・更新・停止やTerraform apply/destroyは、対象と影響を説明してユーザー承認後に行う。

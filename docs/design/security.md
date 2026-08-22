@@ -6,7 +6,7 @@
 | --- | --- |
 | Access Token | JWT、15分、レスポンス本文で返しVueのメモリだけに保存 |
 | Refresh Token | 256bit以上のランダム値、7日、HttpOnly Cookie、DBはハッシュだけ |
-| 署名鍵 | 32byte以上、SSM Parameter Store SecureStringから注入 |
+| 署名鍵 | 32byte以上、Cloudflare SecretsまたはSSM Parameter Store SecureStringから注入 |
 | ローテーション | Refresh成功ごとに旧セッションを失効し、新Tokenへ置換 |
 | 複数端末 | 端末ごとにrefresh_sessionsを作成 |
 
@@ -14,7 +14,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 
 ## 2. Cookie・CSRF・CORS
 
-- 本番はCloudFrontの同一オリジンから画面と`/api/*`を配信する。
+- 公開環境は同一オリジンから画面と`/api/*`を配信する。CloudflareではWorker、AWSではCloudFrontを入口とする。
 - Refresh Cookieは`HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth`とする。
 - Refresh・Logoutは`Origin`ヘッダーが許可オリジンと一致することも検証する。
 - ローカルだけ`http://localhost:5173`から`http://localhost:8080`を許可し、資格情報付きCORSのワイルドカードを使わない。
@@ -22,7 +22,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 
 ## 3. パスワード
 
-- Argon2idを使用し、最低19MiB・2 iterations・parallelism 1を基準に、Fargate上で応答時間を計測して安全側へ調整する。
+- Argon2idを使用し、最低19MiB・2 iterations・parallelism 1を基準に、Cloudflare ContainerとFargateの各実行環境で応答時間を計測して安全側へ調整する。
 - パスワードは12〜128文字。文字種の強制や定期変更は行わず、既知の弱いパスワードは拒否できる構造にする。
 - 仮パスワードは暗号学的乱数で16文字生成し、レスポンスに一度だけ含める。
 - パスワード、仮パスワード、ハッシュ、Authorization、Cookieをログ・例外・分析イベントへ出さない。
@@ -41,12 +41,21 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 - Vueの通常エスケープを使い、`v-html`へユーザー入力を渡さない。
 - Helmet 8.3.0のHTTPセキュリティヘッダーを設定する。本番ではCSPとHSTSを有効にし、非本番ではHTTPのSwagger UIを動かすためこの2項目だけ無効にする。
 - ログインはアカウント単位で5回失敗後15分制限し、IP単位のレート制限も併用する。成功時に失敗回数をリセットする。
-- ログインはIP単位20回/15分、一般APIは同一IPから600回/1分を初期値とする。health APIはALB監視を妨げないよう除外する。
-- レート制限はMVPのECS 1タスク構成に合わせてプロセス内Memoryで保持する。複数タスクへ拡張する場合はRedis等の共有Storageへ変更する。
+- ログインはIP単位20回/15分、一般APIは同一IPから600回/1分を初期値とする。health APIは公開基盤の死活監視を妨げないよう除外する。
+- レート制限はMVPのCloudflare Container最大1インスタンス、またはECS 1タスク構成に合わせてプロセス内Memoryで保持する。複数インスタンス・タスクへ拡張する場合はRedis等の共有Storageへ変更する。
 - JSONとURL encodedのリクエスト本文を100KBまでに制限し、超過はrequestId付き413で拒否する。
-- `TRUST_PROXY_HOPS`はローカル直結で0、CloudFront→ALB→ECSで2とする。実際より広くProxyを信頼して送信元IPを偽装されないよう、0〜2以外を起動時に拒否する。
+- `TRUST_PROXY_HOPS`はローカル直結で0、CloudFront→ALB→ECSで2とする。CloudflareはWorker→Container間で実際に付与される転送ヘッダーとHop数をデプロイ時に確認して確定する。実際より広くProxyを信頼して送信元IPを偽装されないよう、許可値を0〜2に限定する。
 
-## 6. AWS・秘密情報
+## 6. 公開環境・秘密情報
+
+### Cloudflare公開環境
+
+- 利用者→WorkerはHTTPSを強制し、Workerを画面とAPIの単一入口にする。Containerへの直接アクセス経路を公開しない。
+- DB接続情報、JWT鍵、Cookie・Origin検証値はCloudflare Secretsで管理し、`wrangler.toml`やGitHubへ平文で保存しない。
+- Aiven MySQLはTLS証明書を検証して接続し、公開アプリ用の最小権限DBユーザーを使用する。
+- Cloudflare API Tokenは対象Account・Workerへ必要な権限だけを付与し、アカウント全体を操作できるGlobal API KeyをCIへ保存しない。
+
+### AWS課題環境
 
 - ユーザー→CloudFrontはHTTPSを強制する。独自ドメイン未取得のMVPではCloudFront既定証明書を使う。
 - ALB直アクセスはCloudFrontが付ける`X-Origin-Verify`秘密ヘッダーで拒否する。

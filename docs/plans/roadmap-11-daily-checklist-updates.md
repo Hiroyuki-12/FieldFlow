@@ -76,7 +76,7 @@
 - 項目更新者の監査履歴とチェック表の最終確定
 - Playwright E2E全体基盤、k6、ログ全体仕上げ
 - UI・アクセシビリティ全体の仕上げ
-- AWS、Terraform、CD
+- Cloudflare・Aiven公開、AWS・Terraform・CD
 
 ## 6. 完了条件
 

@@ -243,4 +243,4 @@
 
 ## 7. ヘルスチェック
 
-`GET /api/health`は認証不要で、正常時`200 {"status":"ok"}`を返す。DBや秘密情報の詳細は公開せず、ALBの死活監視に必要な最小情報だけを返す。
+`GET /api/health`は認証不要で、正常時`200 {"status":"ok"}`を返す。DBや秘密情報の詳細は公開せず、Cloudflare Worker・ContainerまたはALBの死活監視に必要な最小情報だけを返す。

@@ -5,7 +5,7 @@
 - `main`へ直接commit・pushしない。
 - 1 Issue = 1 branch = 1 PRとし、ブランチ名は`<type>/#<issue>-<slug>`。
 - PR本文に`Closes #<issue>`を含め、レビュー会話とCIを全て解決してからsquashまたはrebase mergeする。
-- 本番デプロイはGitHub Environment `production`の承認後だけ実行する。
+- 公開先ごとにGitHub Environment `cloudflare-public`と`aws-course`を分け、各Environmentの承認後だけデプロイする。
 
 ## 2. CI
 
@@ -61,10 +61,31 @@ k6性能試験は通常PRのRequired checkへ含めず、リリース候補、�
 
 ## 3. CD
 
+### 3.1 Cloudflare公開環境
+
 ```mermaid
 flowchart TD
     M[main merge] --> CI[CI成功]
-    CI --> A[production承認]
+    CI --> A[cloudflare-public承認]
+    A --> BUILD[Frontend・Backend build]
+    BUILD --> MIG[One-off TypeORM migration<br/>Aiven MySQL]
+    MIG -->|成功| DEPLOY[wrangler deploy<br/>Worker・Assets・Container]
+    MIG -->|失敗| STOP[デプロイ停止]
+    DEPLOY --> SMOKE[公開URL smoke確認]
+```
+
+- 初回公開は手順を理解しながら手動実行してよいが、実行コマンド、設定値の置き場所、確認結果を記録し、再現できる状態にする。
+- 自動化時は対象Account・Workerに限定したCloudflare API Tokenを`cloudflare-public` Environmentへ保存する。Global API Keyは使用しない。
+- Aiven Migration用の接続情報とTLS CAはEnvironment Secretsで保護し、WorkflowログやArtifactへ出さない。
+- Migration成功後だけ`wrangler deploy`を実行し、Worker、Static Assets、Containerを同じ公開入口へ反映する。
+- 公開URLでhealth、ログイン、Refresh、日別表の最小スモーク確認を行う。公開環境へk6負荷試験は実行しない。
+
+### 3.2 AWS課題環境
+
+```mermaid
+flowchart TD
+    M[main merge] --> CI[CI成功]
+    CI --> A[aws-course承認]
     A --> OIDC[AWS OIDC認証]
     OIDC --> IMG["Backend build/push<br/>ECR:commit SHA"]
     OIDC --> WEB["Frontend build<br/>S3 upload"]
@@ -85,6 +106,7 @@ flowchart TD
 - PRで`terraform fmt -check`と`terraform validate`を行う。
 - `plan`はAWS認証が利用できる安全なイベントで生成し、秘密値をartifactへ含めない。
 - `apply`と`destroy`は自動実行せず、差分・影響・復旧方法を説明してユーザー承認後に行う。
+- CloudflareのWorker・Assets・ContainerはTerraformの対象に混ぜず、Wrangler設定で管理する。
 
 ## 5. 保護設定
 

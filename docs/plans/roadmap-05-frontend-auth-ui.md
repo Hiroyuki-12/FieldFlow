@@ -167,7 +167,7 @@ cd frontend && npm audit
 - 日別表の作成・取得・更新と、完成版ホーム・日別チェック画面
 - アプリ全体のJSONログ、requestId、例外Filter、一般APIレート制限の完成
 - Playwright E2E、k6性能試験
-- AWS、Terraform、CD
+- Cloudflare・Aiven公開、AWS・Terraform・CD
 
 ## 11. 完了条件
 

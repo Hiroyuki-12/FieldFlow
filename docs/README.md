@@ -2,7 +2,7 @@
 
 ## 読み方
 
-初めて読む場合は、要件定義 → 機能定義 → 画面/API/DB → セキュリティ/AWS → テストの順に確認する。各資料は「何を作るか」だけでなく「なぜその設計にするか」を説明できることを目的とする。
+初めて読む場合は、要件定義 → 機能定義 → 画面/API/DB → セキュリティ → デプロイ環境 → テストの順に確認する。各資料は「何を作るか」だけでなく「なぜその設計にするか」を説明できることを目的とする。
 
 実装へ着手するときは、[MVP実装計画](implementation-plan.md)で依存関係、Issue分割、各段階の完了条件を確認する。
 
@@ -22,7 +22,9 @@
 - [DB設計・ER図](design/database.md)
 - [セキュリティ設計](design/security.md)
 - [アプリケーション構成・技術スタック](design/application-architecture.md)
-- [AWS・Terraform構成](design/aws-architecture.md)
+- [デプロイ環境の使い分け](design/deployment-strategy.md)
+- [Cloudflare・Aiven公開構成](design/cloudflare-architecture.md)
+- [AWS・Terraform課題提出構成](design/aws-architecture.md)
 - [ログ・監視・バックアップ](design/operations.md)
 - [非機能要件](design/non-functional-requirements.md)
 - [テスト戦略](design/test-strategy.md)
@@ -44,6 +46,8 @@
 - [ロードマップ13 ログ・運用・セキュリティ 実装計画](plans/roadmap-13-logging-operations-security.md)
 - [ロードマップ14 Playwright E2E 実装計画](plans/roadmap-14-playwright-e2e.md)
 - [ロードマップ15 k6性能試験 実装計画](plans/roadmap-15-k6-performance.md)
+- [ロードマップ16 Cloudflare・Aiven公開環境 実装計画](plans/roadmap-16-cloudflare-deployment.md)
+- [ロードマップ17 AWS課題提出環境 実装計画](plans/roadmap-17-aws-deployment.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係

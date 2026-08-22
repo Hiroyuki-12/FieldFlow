@@ -16,7 +16,7 @@
 | Password | Argon2id | `argon2` |
 | Backend test | Jest / Supertest / Testcontainers | 単体・MySQL結合 |
 | E2E / Performance | Playwright / k6 | Chromium / API負荷 |
-| DB | MySQL | 8.4 LTS、ローカルも本番も同一メジャー |
+| DB | MySQL | 8.4 LTS、ローカル・Cloudflare/Aiven・AWS/RDSで同一メジャー |
 
 依存は`package-lock.json`で固定し、`npm ci`で再現する。実装開始時に相互互換性を確認した正確なpatch版を記録する。
 
@@ -57,7 +57,7 @@ backend/src/
 - ControllerはHTTP変換、Serviceは業務判断、Repository/Entityは永続化に責任を分ける。
 - グローバルValidationPipe、例外Filter、requestId・アクセスログInterceptorを設定する。
 - TypeORMの`DataSource.transaction`で日別表生成、状態変更、セッションローテーションを原子的に処理する。
-- Swaggerは開発環境でAPI確認に使い、本番公開範囲は制限する。
+- Swaggerは開発環境でAPI確認に使い、どちらの公開環境でも公開範囲を制限する。
 
 ## 4. 主なデータフロー
 
@@ -85,8 +85,10 @@ sequenceDiagram
 
 ## 5. 環境変数
 
-- Frontend: `VITE_API_BASE_URL`。本番は同一オリジンの`/api/v1`、ローカルはVite proxyを推奨する。
-- Backend: `NODE_ENV`、`PORT=8080`、DB接続、JWT署名鍵、Token期限、Cookie Secure、許可Origin、`LOG_LEVEL`、`TRUST_PROXY_HOPS`。
+- Frontend: `VITE_API_BASE_URL`。Cloudflare・AWSの両公開環境は同一オリジンの`/api/v1`、ローカルはVite proxyを推奨する。
+- Backend共通: `NODE_ENV`、`PORT=8080`、DB接続、JWT署名鍵、Token期限、Cookie Secure、許可Origin、`LOG_LEVEL`、`TRUST_PROXY_HOPS`。
+- Cloudflare固有: Aiven MySQLへのTLS有効化、CA、接続pool上限。秘密値はCloudflare SecretsからContainerへ注入する。
+- AWS固有: RDS接続情報とOrigin検証値。秘密値はSSM SecureStringからECSへ注入する。
 - 起動時に型・必須値・範囲を検証し、不正なら安全に起動失敗させる。
 
 ## 6. 参照資料
@@ -98,3 +100,4 @@ sequenceDiagram
 - [TypeORM](https://www.npmjs.com/package/typeorm)
 - [MySQL 8.4 LTS](https://dev.mysql.com/doc/refman/8.4/en/mysql-releases.html)
 - [Tailwind CSS](https://tailwindcss.com/blog)
+- [デプロイ環境の使い分け](deployment-strategy.md)

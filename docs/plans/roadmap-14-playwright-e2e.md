@@ -39,9 +39,9 @@ Playwright Chromiumを使い、Vueの画面操作からNestJSの認証・業務�
 ## 6. 対象外
 
 - k6性能試験
-- AWS、Terraform、CD
+- Cloudflare、Aiven、AWS、Terraform、CD
 - Firefox、WebKit、モバイル実機でのE2E
-- 本番環境・本番データを使う試験
+- Cloudflare公開環境・AWS課題環境と、その永続データを使う試験
 
 ## 7. 完了条件
 

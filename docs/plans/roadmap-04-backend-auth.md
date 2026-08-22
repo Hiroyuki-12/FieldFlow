@@ -151,7 +151,7 @@ cd backend && npm run build
 - ユーザー管理APIと管理画面
 - 全API共通の例外Filter、requestId、JSON監査ログの完成
 - Playwright E2E、k6性能試験
-- AWS、Terraform、CD
+- Cloudflare・Aiven公開、AWS・Terraform・CD
 
 ## 10. 完了条件
 

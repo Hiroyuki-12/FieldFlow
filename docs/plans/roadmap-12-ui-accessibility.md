@@ -53,7 +53,7 @@
 - Backend API、Entity、Migration、DB制約の変更
 - Playwright E2E基盤とシナリオ実装（ロードマップ14）
 - k6性能試験（ロードマップ15）
-- AWS・Terraform・CD（ロードマップ16）
+- Cloudflare・Aiven公開（ロードマップ16）、AWS・Terraform・CD（ロードマップ17）
 - WCAGへの完全準拠を保証する第三者監査
 
 ## 8. 完了条件

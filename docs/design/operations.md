@@ -10,7 +10,7 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
   "level": "info",
   "service": "fieldflow-backend",
   "environment": "prod",
-  "requestId": "01J...",
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
   "event": "http_request_completed",
   "method": "PATCH",
   "path": "/api/v1/daily-checklists/:date/items/:itemId",
@@ -33,6 +33,8 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 
 管理操作はactorの`userId`、対象種別、対象ID、結果を記録する。チェック項目の更新者を業務画面へ表示する履歴はMVP対象外だが、セキュリティ調査用アクセスログには認証ユーザーIDを含める。
 
+ロードマップ13では`authentication_login`、`authentication_refresh`、`authentication_logout`、`authentication_password_change`と`management_operation`を実装した。通常の成功は`info`、認証失敗・Refresh再利用・409・429は`warn`、500は`error`とする。`LOG_LEVEL`で環境ごとの出力閾値を設定する。
+
 ## 3. 記録禁止・マスキング
 
 - パスワード、仮パスワード、passwordHash
@@ -45,9 +47,10 @@ NestJSは1イベント1行のJSONを標準出力へ出し、ECSの`awslogs`ド�
 
 ## 4. requestId
 
-- CloudFront由来のIDが利用できても、アプリ入口でULID等のrequestIdを必ず確定する。
+- CloudFront由来のIDや利用者が送った値を採用せず、アプリ入口でUUID v4のrequestIdを必ず生成する。外部入力によるログ汚染とID衝突を防ぐためである。
 - レスポンスヘッダー`X-Request-Id`とエラー本文に返す。
-- Controller、Service、DBエラーを同じrequestIdで検索できるようAsyncLocalStorage等で伝播する。
+- Node.js標準の`AsyncLocalStorage`で伝播し、Controller、Service、DBエラー、認証・管理操作を同じrequestIdで検索できるようにする。
+- アクセスログのpathはRoute Templateを使い、UUID、日付、Query、リクエスト・レスポンス本文を記録しない。
 
 ## 5. 監視とアラーム
 

@@ -1,4 +1,5 @@
-import { RecordStatus } from '../database/entities';
+import { AuditLogService } from '../common/logging/audit-log.service';
+import { RecordStatus, UserRole } from '../database/entities';
 import { CategoriesController } from './categories.controller';
 import { CategoriesService } from './categories.service';
 
@@ -10,9 +11,19 @@ describe('CategoriesController', () => {
     update: jest.fn(),
     updateStatus: jest.fn(),
   };
+  const auditLogService = { management: jest.fn() };
   const controller = new CategoriesController(
     categoriesService as unknown as CategoriesService,
+    auditLogService as unknown as AuditLogService,
   );
+  const currentUser = {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: '管理者',
+    loginId: 'admin',
+    role: UserRole.ADMIN,
+    mustChangePassword: false,
+    authVersion: 1,
+  };
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -29,11 +40,17 @@ describe('CategoriesController', () => {
     const dto = { status: RecordStatus.INACTIVE, version: 3 };
     categoriesService.updateStatus.mockResolvedValue({ id: 'category-id' });
 
-    await controller.updateStatus('category-id', dto);
+    await controller.updateStatus(currentUser, 'category-id', dto);
 
     expect(categoriesService.updateStatus).toHaveBeenCalledWith(
       'category-id',
       dto,
+    );
+    expect(auditLogService.management).toHaveBeenCalledWith(
+      currentUser.id,
+      'category_status_updated',
+      'category',
+      'category-id',
     );
   });
 });

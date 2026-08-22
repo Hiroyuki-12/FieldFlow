@@ -22,6 +22,10 @@ describe('environmentValidationSchema', () => {
     });
 
     expect(result.error).toBeUndefined();
+    expect(result.value).toMatchObject({
+      LOG_LEVEL: 'info',
+      TRUST_PROXY_HOPS: 0,
+    });
   });
 
   it('必須値が不足している場合は起動前に検出する', () => {
@@ -77,5 +81,19 @@ describe('environmentValidationSchema', () => {
     });
 
     expect(result.error?.message).toContain('COOKIE_SECURE');
+  });
+
+  it('未対応のログレベルと過剰なProxy信頼段数を拒否する', () => {
+    const result = environmentValidationSchema.validate(
+      {
+        ...validEnvironment,
+        LOG_LEVEL: 'trace',
+        TRUST_PROXY_HOPS: 3,
+      },
+      { abortEarly: false },
+    );
+
+    expect(result.error?.message).toContain('LOG_LEVEL');
+    expect(result.error?.message).toContain('TRUST_PROXY_HOPS');
   });
 });

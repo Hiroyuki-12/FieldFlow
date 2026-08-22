@@ -10,6 +10,7 @@ import { DataSource } from 'typeorm';
 
 import { AuthModule } from '../src/auth/auth.module';
 import { REFRESH_TOKEN_COOKIE_NAME } from '../src/auth/auth.constants';
+import { ApplicationLogger } from '../src/common/logging/application-logger';
 import { hashPassword } from '../src/common/security/password-hashing';
 import { environmentValidationSchema } from '../src/config/environment.schema';
 import { configureApp } from '../src/configure-app';
@@ -54,6 +55,7 @@ describe('Auth API (integration)', () => {
   let app: INestApplication;
   let initialAdminHash: string;
   let workerHash: string;
+  let logEventSpy: jest.SpiedFunction<ApplicationLogger['event']>;
 
   const origin = 'http://localhost:5173';
   const adminId = '11111111-1111-4111-8111-111111111111';
@@ -73,6 +75,7 @@ describe('Auth API (integration)', () => {
 
     Object.assign(process.env, {
       NODE_ENV: 'test',
+      LOG_LEVEL: 'fatal',
       PORT: '8080',
       CORS_ORIGIN: origin,
       DB_HOST: container.getHost(),
@@ -131,12 +134,17 @@ describe('Auth API (integration)', () => {
         HealthModule,
       ],
     }).compile();
+    // 実際の構造化loggerをSpyし、秘密値を標準出力へ出さずイベント内容を検証する。
+    logEventSpy = jest
+      .spyOn(moduleFixture.get(ApplicationLogger), 'event')
+      .mockImplementation(() => undefined);
     app = moduleFixture.createNestApplication();
     configureApp(app);
     await app.init();
   });
 
   beforeEach(async () => {
+    logEventSpy.mockClear();
     // 各シナリオのSession・パスワード・ロック状態を初期化し、テスト順への依存をなくす。
     // ローテーション履歴は自己参照外部キーで保護されるため、テストデータだけ参照を外してから消す。
     await dataSource.query(
@@ -169,6 +177,7 @@ describe('Auth API (integration)', () => {
     if (container) {
       await container.stop();
     }
+    logEventSpy.mockRestore();
   });
 
   it('ログインでAccess TokenとHttpOnly Refresh Cookieを発行する', async () => {
@@ -192,6 +201,14 @@ describe('Auth API (integration)', () => {
     expect(setCookies[0]).toContain('HttpOnly');
     expect(setCookies[0]).toContain('SameSite=Lax');
     expect(setCookies[0]).toContain('Path=/api/v1/auth');
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'info',
+      'authentication_login',
+      expect.objectContaining({ result: 'succeeded', userId: workerId }),
+    );
+    const loggedValues = JSON.stringify(logEventSpy.mock.calls);
+    expect(loggedValues).not.toContain(workerPassword);
+    expect(loggedValues).not.toContain(rawRefreshToken);
 
     const [session] = await dataSource.query<RefreshSessionRow[]>(
       `SELECT token_hash AS tokenHash, revoked_at AS revokedAt,
@@ -228,6 +245,15 @@ describe('Auth API (integration)', () => {
 
     // 正しいパスワードへ切り替えても、ロック期限までは認証できない。
     await login('worker01', workerPassword).expect(401);
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'warn',
+      'authentication_login',
+      expect.objectContaining({ result: 'failed' }),
+    );
+    expect(JSON.stringify(logEventSpy.mock.calls)).not.toContain('worker01');
+    expect(JSON.stringify(logEventSpy.mock.calls)).not.toContain(
+      'wrong password 123',
+    );
   });
 
   it('ログイン失敗後に成功して失敗状態を初期化しても管理用versionを増やさない', async () => {
@@ -301,6 +327,11 @@ describe('Auth API (integration)', () => {
     await refresh(oldCookie).expect(401);
     // 検知時に新Tokenを含む全端末Sessionが失効している。
     await refresh(nextCookie).expect(401);
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'warn',
+      'authentication_refresh',
+      expect.objectContaining({ result: 'reused', userId: workerId }),
+    );
 
     const sessions = await dataSource.query<RefreshSessionRow[]>(
       `SELECT token_hash AS tokenHash, revoked_at AS revokedAt,
@@ -331,6 +362,11 @@ describe('Auth API (integration)', () => {
     expect(
       normalizeSetCookies(logoutResponse.headers['set-cookie'])[0],
     ).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=;`);
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'info',
+      'authentication_logout',
+      expect.objectContaining({ result: 'succeeded', userId: workerId }),
+    );
 
     await refresh(firstCookie).expect(401);
     await refresh(secondCookie).expect(200);
@@ -356,6 +392,14 @@ describe('Auth API (integration)', () => {
         newPassword: newAdminPassword,
       })
       .expect(204);
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'info',
+      'authentication_password_change',
+      expect.objectContaining({ result: 'succeeded', userId: adminId }),
+    );
+    expect(JSON.stringify(logEventSpy.mock.calls)).not.toContain(
+      newAdminPassword,
+    );
 
     await request(app.getHttpServer() as Server)
       .get('/api/v1/auth/me')

@@ -39,9 +39,12 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 - DTOを`whitelist`と`forbidNonWhitelisted`で検証し、未定義項目を拒否する。
 - TypeORMのパラメータバインドを使用し、入力からSQL文字列を組み立てない。
 - Vueの通常エスケープを使い、`v-html`へユーザー入力を渡さない。
-- Helmet相当のHTTPセキュリティヘッダーを設定する。
+- Helmet 8.3.0のHTTPセキュリティヘッダーを設定する。本番ではCSPとHSTSを有効にし、非本番ではHTTPのSwagger UIを動かすためこの2項目だけ無効にする。
 - ログインはアカウント単位で5回失敗後15分制限し、IP単位のレート制限も併用する。成功時に失敗回数をリセットする。
-- 一般APIにも適切なレート制限とリクエストサイズ上限を設ける。
+- ログインはIP単位20回/15分、一般APIは同一IPから600回/1分を初期値とする。health APIはALB監視を妨げないよう除外する。
+- レート制限はMVPのECS 1タスク構成に合わせてプロセス内Memoryで保持する。複数タスクへ拡張する場合はRedis等の共有Storageへ変更する。
+- JSONとURL encodedのリクエスト本文を100KBまでに制限し、超過はrequestId付き413で拒否する。
+- `TRUST_PROXY_HOPS`はローカル直結で0、CloudFront→ALB→ECSで2とする。実際より広くProxyを信頼して送信元IPを偽装されないよう、0〜2以外を起動時に拒否する。
 
 ## 6. AWS・秘密情報
 

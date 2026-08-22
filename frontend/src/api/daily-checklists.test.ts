@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { server } from '../test/server';
 import {
+  addDailyChecklistCategories,
   cancelDailyChecklist,
   createDailyChecklist,
   getDailyChecklist,
   listChecklistCategoryOptions,
+  updateDailyChecklistItem,
   updateDailyChecklistConfiguration,
 } from './daily-checklists';
 
@@ -97,6 +99,51 @@ describe('daily-checklists API', () => {
     await expect(
       cancelDailyChecklist('2026-08-18', input),
     ).resolves.toBeUndefined();
+  });
+
+  it('時間帯と項目IDをURLに含め、数量・準備状態・versionをPATCHする', async () => {
+    const input = { takeoutQuantity: 2, checked: true, version: 3 };
+    const item = {
+      id: 'item-1',
+      sourceToolId: 'tool-1',
+      toolName: 'モップ',
+      categoryName: '清掃',
+      stockQuantity: 3,
+      takeoutQuantity: 2,
+      checked: true,
+      version: 4,
+      updatedAt: '2026-08-18T00:00:00.000Z',
+    };
+    server.use(
+      http.patch(
+        '*/api/v1/daily-checklists/2026-08-18/periods/MORNING/items/item-1',
+        async ({ request }) => {
+          expect(await request.json()).toEqual(input);
+          return HttpResponse.json(item);
+        },
+      ),
+    );
+
+    await expect(
+      updateDailyChecklistItem('2026-08-18', 'MORNING', 'item-1', input),
+    ).resolves.toEqual(item);
+  });
+
+  it('時間帯へ追加するカテゴリIDをPOSTし、更新後の日別表を受け取る', async () => {
+    const input = { categoryIds: ['category-2'] };
+    server.use(
+      http.post(
+        '*/api/v1/daily-checklists/2026-08-18/periods/FULL_DAY/categories',
+        async ({ request }) => {
+          expect(await request.json()).toEqual(input);
+          return HttpResponse.json(checklist);
+        },
+      ),
+    );
+
+    await expect(
+      addDailyChecklistCategories('2026-08-18', 'FULL_DAY', input),
+    ).resolves.toEqual(checklist);
   });
 
   it('道具一覧の選択肢から利用中のWORKカテゴリだけを返す', async () => {

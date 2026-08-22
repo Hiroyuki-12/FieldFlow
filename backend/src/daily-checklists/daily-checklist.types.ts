@@ -50,6 +50,23 @@ export type DailyChecklistGraph = DailyChecklist & {
   >;
 };
 
+/** 単一行の更新成功・競合応答でも、日別表全体と同じ公開項目だけを返す。 */
+export function toDailyChecklistItemResponse(
+  item: DailyChecklistItem,
+): DailyChecklistItemResponse {
+  return {
+    id: item.id,
+    sourceToolId: item.sourceToolId,
+    toolName: item.toolNameSnapshot,
+    categoryName: item.categoryNameSnapshot,
+    stockQuantity: item.stockQuantitySnapshot,
+    takeoutQuantity: item.takeoutQuantity,
+    checked: item.checked,
+    version: item.version,
+    updatedAt: item.updatedAt,
+  };
+}
+
 const PERIOD_ORDER: Record<ChecklistPeriodType, number> = {
   [ChecklistPeriodType.FULL_DAY]: 0,
   [ChecklistPeriodType.MORNING]: 1,
@@ -99,17 +116,7 @@ export function toDailyChecklistResponse(
               compareText(left.toolNameSnapshot, right.toolNameSnapshot) ||
               compareText(left.id, right.id),
           )
-          .map((item) => ({
-            id: item.id,
-            sourceToolId: item.sourceToolId,
-            toolName: item.toolNameSnapshot,
-            categoryName: item.categoryNameSnapshot,
-            stockQuantity: item.stockQuantitySnapshot,
-            takeoutQuantity: item.takeoutQuantity,
-            checked: item.checked,
-            version: item.version,
-            updatedAt: item.updatedAt,
-          })),
+          .map(toDailyChecklistItemResponse),
       })),
   };
 }

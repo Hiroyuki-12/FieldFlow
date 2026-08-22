@@ -29,14 +29,18 @@ import {
 } from '../database/entities';
 import {
   DailyChecklistGraph,
+  DailyChecklistItemResponse,
   DailyChecklistResponse,
   toDailyChecklistResponse,
+  toDailyChecklistItemResponse,
 } from './daily-checklist.types';
+import { AddDailyChecklistCategoriesDto } from './dto/add-daily-checklist-categories.dto';
 import {
   CreateDailyChecklistDto,
   CreateDailyChecklistPeriodDto,
 } from './dto/create-daily-checklist.dto';
 import { CancelDailyChecklistDto } from './dto/cancel-daily-checklist.dto';
+import { UpdateDailyChecklistItemDto } from './dto/update-daily-checklist-item.dto';
 import { UpdateDailyChecklistConfigurationDto } from './dto/update-daily-checklist-configuration.dto';
 
 /** 日別表の取得、方式検証、スナップショット作成、冪等性を担当する業務Service。 */
@@ -102,6 +106,159 @@ export class DailyChecklistsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * 1行だけを画面が取得したversionで更新する。
+   * ヘッダーを共有ロックし、設定変更・削除が同じ行を履歴化する途中へ更新を混入させない。
+   */
+  async updateItem(
+    workDate: string,
+    periodType: ChecklistPeriodType,
+    itemId: string,
+    dto: UpdateDailyChecklistItemDto,
+  ): Promise<DailyChecklistItemResponse> {
+    this.assertEditableDate(workDate, '更新');
+
+    return this.dataSource.transaction(async (manager) => {
+      const checklist = await this.lockActiveHeaderForRead(manager, workDate);
+      const period = await this.loadPeriod(
+        manager,
+        checklist.id,
+        periodType,
+      );
+      const item = await this.loadItem(manager, period.id, itemId);
+      this.assertItemValues(item, dto);
+
+      // VersionColumnの暗黙動作に依存せず、更新条件と加算を同じSQLへ明示する。
+      const result = await manager
+        .getRepository(DailyChecklistItem)
+        .createQueryBuilder()
+        .update(DailyChecklistItem)
+        .set({
+          takeoutQuantity: dto.takeoutQuantity,
+          checked: dto.checked,
+          version: () => '`version` + 1',
+        })
+        .where('id = :itemId', { itemId })
+        .andWhere('version = :version', { version: dto.version })
+        .execute();
+
+      // REPEATABLE READの開始時スナップショットではなく、先行更新のcommit後の最新行を読む。
+      // これがないと409へ古いversionを返し、Frontendが同じ競合を繰り返してしまう。
+      const currentItem = await this.loadCurrentItem(
+        manager,
+        period.id,
+        itemId,
+      );
+      if (result.affected !== 1) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'CHECKLIST_ITEM_UPDATE_CONFLICT',
+          message:
+            '他の利用者が先にこの道具を更新しました。最新の状態を確認してください。',
+          details: {
+            currentItem: toDailyChecklistItemResponse(currentItem),
+          },
+        });
+      }
+      return toDailyChecklistItemResponse(currentItem);
+    });
+  }
+
+  /** 選択済み時間帯へ、カテゴリと現在有効な道具のスナップショットを一括追加する。 */
+  async addCategories(
+    workDate: string,
+    periodType: ChecklistPeriodType,
+    dto: AddDailyChecklistCategoriesDto,
+  ): Promise<DailyChecklistResponse> {
+    this.assertEditableDate(workDate, 'カテゴリ追加');
+
+    const checklist = await this.dataSource.transaction(async (manager) => {
+      const header = await this.lockActiveHeaderForRead(manager, workDate);
+      // 同じ時間帯への追加を直列化し、同時リクエストも重複検査で確実に検知する。
+      const period = await this.lockPeriod(
+        manager,
+        header.id,
+        periodType,
+      );
+      const periodCategoryRepository = manager.getRepository(
+        DailyChecklistPeriodCategory,
+      );
+      const existingCategories = await periodCategoryRepository.find({
+        where: { periodId: period.id },
+      });
+      const existingCategoryIds = new Set(
+        existingCategories.map((category) => category.sourceCategoryId),
+      );
+      if (dto.categoryIds.some((id) => existingCategoryIds.has(id))) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'CHECKLIST_CATEGORY_ALREADY_ADDED',
+          message: '選択した作業カテゴリはこの時間帯へ追加済みです。',
+        });
+      }
+
+      const categories = await this.lockCategories(manager, dto.categoryIds);
+      const categoryById = new Map(
+        categories.map((category) => [category.id, category]),
+      );
+      this.assertRequestedCategories(dto.categoryIds, categoryById);
+      const tools = await this.lockActiveTools(manager, dto.categoryIds);
+
+      // 道具がカテゴリ間を移動した後でも、同じ元道具を同一時間帯へ二重生成しない。
+      const existingItems = await manager
+        .getRepository(DailyChecklistItem)
+        .find({ where: { periodId: period.id } });
+      const existingToolIds = new Set(
+        existingItems.map((item) => item.sourceToolId),
+      );
+      if (tools.some((tool) => existingToolIds.has(tool.id))) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: 'CHECKLIST_TOOL_ALREADY_ADDED',
+          message: '追加対象の道具はこの時間帯へ追加済みです。',
+        });
+      }
+
+      const periodCategories = dto.categoryIds.map((categoryId) => {
+        const category = categoryById.get(categoryId);
+        if (!category) {
+          throw new Error(`Validated category is missing: ${categoryId}`);
+        }
+        return periodCategoryRepository.create({
+          id: randomUUID(),
+          periodId: period.id,
+          sourceCategoryId: category.id,
+          categoryNameSnapshot: category.name,
+          displayOrderSnapshot: category.displayOrder,
+        });
+      });
+      await periodCategoryRepository.save(periodCategories);
+
+      const itemRepository = manager.getRepository(DailyChecklistItem);
+      const items = tools.map((tool) => {
+        const category = categoryById.get(tool.categoryId);
+        if (!category) {
+          throw new Error(`Validated category is missing: ${tool.categoryId}`);
+        }
+        return itemRepository.create({
+          id: randomUUID(),
+          periodId: period.id,
+          sourceToolId: tool.id,
+          toolNameSnapshot: tool.name,
+          categoryNameSnapshot: category.name,
+          stockQuantitySnapshot: tool.stockQuantity,
+          takeoutQuantity: 0,
+          checked: false,
+          displayOrderSnapshot: tool.displayOrder,
+        });
+      });
+      if (items.length > 0) await itemRepository.save(items);
+
+      return this.loadRequiredByDate(manager, workDate);
+    });
+    return this.toResponse(checklist);
   }
 
   /**
@@ -348,12 +505,122 @@ export class DailyChecklistsService {
     }
   }
 
-  private assertEditableDate(workDate: string): void {
+  private assertEditableDate(
+    workDate: string,
+    operation = '変更・削除',
+  ): void {
     if (workDate < this.todayInTokyo()) {
       throw new UnprocessableEntityException({
         statusCode: 422,
         code: 'CHECKLIST_PAST_DATE',
-        message: '過去日の日別チェックは変更・削除できません。',
+        message: `過去日の日別チェックは${operation}できません。`,
+      });
+    }
+  }
+
+  /** 項目更新・カテゴリ追加中は現行版を維持し、設定変更や削除の排他ロックを待たせる。 */
+  private async lockActiveHeaderForRead(
+    manager: EntityManager,
+    workDate: string,
+  ): Promise<DailyChecklist> {
+    const checklist = await manager
+      .getRepository(DailyChecklist)
+      .createQueryBuilder('checklist')
+      .setLock('pessimistic_read')
+      .where('checklist.workDate = :workDate', { workDate })
+      .andWhere('checklist.status = :status', {
+        status: DailyChecklistStatus.ACTIVE,
+      })
+      .getOne();
+    if (!checklist) this.throwChecklistNotFound();
+    return checklist;
+  }
+
+  private async loadPeriod(
+    manager: EntityManager,
+    checklistId: string,
+    periodType: ChecklistPeriodType,
+  ): Promise<DailyChecklistPeriod> {
+    const period = await manager.getRepository(DailyChecklistPeriod).findOne({
+      where: { checklistId, period: periodType },
+    });
+    if (!period) this.throwPeriodNotFound();
+    return period;
+  }
+
+  private async lockPeriod(
+    manager: EntityManager,
+    checklistId: string,
+    periodType: ChecklistPeriodType,
+  ): Promise<DailyChecklistPeriod> {
+    const period = await manager
+      .getRepository(DailyChecklistPeriod)
+      .createQueryBuilder('period')
+      .setLock('pessimistic_write')
+      .where('period.checklistId = :checklistId', { checklistId })
+      .andWhere('period.period = :periodType', { periodType })
+      .getOne();
+    if (!period) this.throwPeriodNotFound();
+    return period;
+  }
+
+  private async loadItem(
+    manager: EntityManager,
+    periodId: string,
+    itemId: string,
+  ): Promise<DailyChecklistItem> {
+    const item = await manager.getRepository(DailyChecklistItem).findOne({
+      where: { id: itemId, periodId },
+    });
+    if (!item) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'CHECKLIST_ITEM_NOT_FOUND',
+        message: '指定した日別チェック項目が見つかりません。',
+      });
+    }
+    return item;
+  }
+
+  private async loadCurrentItem(
+    manager: EntityManager,
+    periodId: string,
+    itemId: string,
+  ): Promise<DailyChecklistItem> {
+    // ロック付きSELECTはMySQLのcurrent readとなり、同じTransaction内の古いスナップショットを使わない。
+    const item = await manager
+      .getRepository(DailyChecklistItem)
+      .createQueryBuilder('item')
+      .setLock('pessimistic_read')
+      .where('item.id = :itemId', { itemId })
+      .andWhere('item.periodId = :periodId', { periodId })
+      .getOne();
+    if (!item) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'CHECKLIST_ITEM_NOT_FOUND',
+        message: '指定した日別チェック項目が見つかりません。',
+      });
+    }
+    return item;
+  }
+
+  private assertItemValues(
+    item: DailyChecklistItem,
+    dto: UpdateDailyChecklistItemDto,
+  ): void {
+    if (dto.takeoutQuantity > item.stockQuantitySnapshot) {
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        code: 'CHECKLIST_ITEM_QUANTITY_INVALID',
+        message: '持ち出し数は在庫数以下で入力してください。',
+      });
+    }
+    if (dto.takeoutQuantity === 0 && dto.checked) {
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        code: 'CHECKLIST_ITEM_CHECK_INVALID',
+        message: '持ち出し数が0の道具は準備済みにできません。',
       });
     }
   }
@@ -557,6 +824,14 @@ export class DailyChecklistsService {
       statusCode: 404,
       code: 'CHECKLIST_NOT_FOUND',
       message: '指定した日の日別チェックが見つかりません。',
+    });
+  }
+
+  private throwPeriodNotFound(): never {
+    throw new NotFoundException({
+      statusCode: 404,
+      code: 'CHECKLIST_PERIOD_NOT_FOUND',
+      message: '指定した日別チェックの時間帯が見つかりません。',
     });
   }
 }

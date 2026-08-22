@@ -60,6 +60,7 @@ interface AuthenticatedRequestBuilder {
   delete: (path: string) => request.Test;
   get: (path: string) => request.Test;
   patch: (path: string) => request.Test;
+  post: (path: string) => request.Test;
   put: (path: string) => request.Test;
 }
 
@@ -164,6 +165,18 @@ describe('Daily checklists API (integration)', () => {
     const workDate = dateInTokyo(1);
     await request(app.getHttpServer() as Server)
       .get(`/api/v1/daily-checklists/${workDate}`)
+      .expect(401);
+    await request(app.getHttpServer() as Server)
+      .patch(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/11111111-1111-4111-8111-111111111111`,
+      )
+      .send({ takeoutQuantity: 1, checked: false, version: 1 })
+      .expect(401);
+    await request(app.getHttpServer() as Server)
+      .post(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/categories`,
+      )
+      .send({ categoryIds: [cleaningId] })
       .expect(401);
     await authenticatedRequest(workerToken)
       .get(`/api/v1/daily-checklists/${workDate}`)
@@ -440,6 +453,170 @@ describe('Daily checklists API (integration)', () => {
           ]),
         );
       });
+  });
+
+  it('数量・準備状態を在庫境界内で更新し、数量0では同時に未準備へ戻す', async () => {
+    const workDate = dateInTokyo(11);
+    const created = await authenticatedRequest(workerToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const checklist = created.body as ChecklistBody;
+    const item = checklist.periods[0].items.find(
+      (candidate) => candidate.sourceToolId === mopId,
+    );
+    expect(item).toBeDefined();
+
+    const updated = await authenticatedRequest(workerToken)
+      .patch(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/${item!.id}`,
+      )
+      .send({ takeoutQuantity: 2, checked: true, version: item!.version })
+      .expect(200);
+    expect(updated.body).toMatchObject({
+      id: item!.id,
+      takeoutQuantity: 2,
+      checked: true,
+      version: item!.version + 1,
+    });
+
+    const cleared = await authenticatedRequest(adminToken)
+      .patch(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/${item!.id}`,
+      )
+      .send({
+        takeoutQuantity: 0,
+        checked: false,
+        version: (updated.body as { version: number }).version,
+      })
+      .expect(200);
+    expect(cleared.body).toMatchObject({
+      takeoutQuantity: 0,
+      checked: false,
+      version: item!.version + 2,
+    });
+
+    await authenticatedRequest(workerToken)
+      .patch(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/${item!.id}`,
+      )
+      .send({
+        takeoutQuantity: 3,
+        checked: false,
+        version: (cleared.body as { version: number }).version,
+      })
+      .expect(422)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_ITEM_QUANTITY_INVALID');
+      });
+    await authenticatedRequest(workerToken)
+      .patch(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/${item!.id}`,
+      )
+      .send({
+        takeoutQuantity: 0,
+        checked: true,
+        version: (cleared.body as { version: number }).version,
+      })
+      .expect(422)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_ITEM_CHECK_INVALID');
+      });
+  });
+
+  it('同じversionの同時更新は一方だけ成功し、409へ最新行を返す', async () => {
+    const workDate = dateInTokyo(12);
+    const created = await authenticatedRequest(workerToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const checklist = created.body as ChecklistBody;
+    const item = checklist.periods[0].items.find(
+      (candidate) => candidate.sourceToolId === mopId,
+    );
+    const path = `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/items/${item!.id}`;
+    const input = { takeoutQuantity: 1, checked: false, version: item!.version };
+
+    const [first, second] = await Promise.all([
+      authenticatedRequest(adminToken).patch(path).send(input),
+      authenticatedRequest(workerToken).patch(path).send(input),
+    ]);
+    const responses = [first, second].sort((left, right) => left.status - right.status);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 409]);
+    expect(responses[1].body).toMatchObject({
+      code: 'CHECKLIST_ITEM_UPDATE_CONFLICT',
+      details: {
+        currentItem: {
+          id: item!.id,
+          takeoutQuantity: 1,
+          checked: false,
+          version: item!.version + 1,
+        },
+      },
+    });
+  });
+
+  it('作成済み時間帯へ未選択カテゴリと有効な道具を一括追加し、重複を拒否する', async () => {
+    const workDate = dateInTokyo(13);
+    const created = await authenticatedRequest(adminToken)
+      .put(`/api/v1/daily-checklists/${workDate}`)
+      .send(fullDayBody(cleaningId))
+      .expect(200);
+    const original = created.body as ChecklistBody;
+
+    const added = await authenticatedRequest(workerToken)
+      .post(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/categories`,
+      )
+      .send({ categoryIds: [inspectionId] })
+      .expect(201);
+    const current = added.body as ChecklistBody;
+    expect(current.id).toBe(original.id);
+    expect(current.periods[0].categories).toEqual(
+      expect.arrayContaining([
+        { sourceCategoryId: cleaningId, categoryName: '清掃' },
+        { sourceCategoryId: inspectionId, categoryName: '設備点検' },
+      ]),
+    );
+    expect(current.periods[0].items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceToolId: testerId,
+          toolName: 'テスター',
+          categoryName: '設備点検',
+          stockQuantity: 3,
+          version: 1,
+        }),
+      ]),
+    );
+    expect(
+      current.periods[0].items.filter(
+        (candidate) => candidate.sourceToolId === glovesId,
+      ),
+    ).toHaveLength(1);
+
+    await authenticatedRequest(adminToken)
+      .post(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/categories`,
+      )
+      .send({ categoryIds: [inspectionId] })
+      .expect(409)
+      .expect(({ body }: { body: { code?: string } }) => {
+        expect(body.code).toBe('CHECKLIST_CATEGORY_ALREADY_ADDED');
+      });
+    await authenticatedRequest(adminToken)
+      .post(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/categories`,
+      )
+      .send({ categoryIds: [inactiveCategoryId] })
+      .expect(422);
+    await authenticatedRequest(adminToken)
+      .post(
+        `/api/v1/daily-checklists/${workDate}/periods/FULL_DAY/categories`,
+      )
+      .send({ categoryIds: [commonId] })
+      .expect(422);
   });
 
   it('同日・同方式の同時作成を1件へ収束させる', async () => {
@@ -740,6 +917,8 @@ describe('Daily checklists API (integration)', () => {
         withToken(request(app.getHttpServer() as Server).get(path)),
       patch: (path) =>
         withToken(request(app.getHttpServer() as Server).patch(path)),
+      post: (path) =>
+        withToken(request(app.getHttpServer() as Server).post(path)),
       put: (path) =>
         withToken(request(app.getHttpServer() as Server).put(path)),
     };

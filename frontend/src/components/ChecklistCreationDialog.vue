@@ -217,13 +217,31 @@ function messageFor(error: unknown): string {
         <p class="mt-2 text-sm leading-6 text-[#49666a]">
           {{
             isEditing
-              ? '変更前の内容は履歴として残ります。同じ時間帯・同じ道具の入力値は引き継がれます。'
-              : '時間帯と作業カテゴリをまとめて選びます。'
+              ? '最新のマスター内容から新版を作成します。保存前に入力値への影響を確認してください。'
+              : '時間帯と作業カテゴリをまとめて選び、現在のマスター内容からチェック表を作成します。'
           }}
         </p>
       </header>
 
       <div class="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-7">
+        <section
+          class="rounded-2xl border border-[#b8d2ca] bg-[#edf7f3] p-4 text-sm leading-6 text-[#315b59]"
+          aria-labelledby="snapshot-impact-title"
+        >
+          <h3 id="snapshot-impact-title" class="font-black text-[#153f3d]">
+            {{ isEditing ? '設定変更で作成する新版について' : '作成時に保存される内容' }}
+          </h3>
+          <ul v-if="isEditing" class="mt-2 list-disc space-y-1 pl-5">
+            <li>最新の作業カテゴリ・共通道具から新版を作成します。</li>
+            <li>変更前の表は、取消された履歴として残ります。</li>
+            <li>同じ時間帯・同じ道具の数量と準備状態だけを引き継ぎます。</li>
+            <li>午前・午後から1日通しへ変更するなど、時間帯が変わる道具の入力値は引き継ぎません。</li>
+          </ul>
+          <p v-else class="mt-2">
+            選択した作業カテゴリと現在有効な共通道具・在庫数を、作成時点の内容として保存します。作成後のマスター変更は自動では反映されません。
+          </p>
+        </section>
+
         <p
           v-if="errorMessage"
           class="rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
@@ -238,7 +256,7 @@ function messageFor(error: unknown): string {
           role="alert"
         >
           <strong class="block">入力済みの内容があります</strong>
-          同じ時間帯・同じ道具の数量と準備状態は引き継ぎます。時間帯を移動した道具や、選択から外した道具の入力内容は新しい表には残りません。内容を確認して保存してください。
+          同じ時間帯・同じ道具の数量と準備状態は引き継ぎます。時間帯が変わる道具や、選択から外した道具の入力内容は新しい表には残りません。内容を確認して保存してください。
         </div>
 
         <fieldset>

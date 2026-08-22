@@ -13,10 +13,20 @@
   text-rendering: optimizeLegibility;
 }
 
+html {
+  min-width: 320px;
+  overflow-wrap: anywhere;
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 12% 8%, rgb(11 107 98 / 9%), transparent 24rem),
+    linear-gradient(180deg, #f8f5ee 0%, #f5f2ea 100%);
 }
 
 button,
@@ -28,17 +38,126 @@ textarea {
 
 button,
 a,
-input {
+input,
+select,
+textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex="-1"]:focus-visible {
   outline: 3px solid rgb(232 121 52 / 45%);
   outline-offset: 3px;
 }
 
 button:disabled {
   cursor: not-allowed;
+}
+
+nav a[aria-current="page"] {
+  color: #074d47;
+  background: #d8eee8;
+}
+
+.app-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid;
+  border-radius: 0.875rem;
+}
+
+.app-notice-icon {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 9999px;
+  color: white;
+  font-weight: 900;
+}
+
+.app-notice-success {
+  border-color: #b9ddce;
+  color: #1d6240;
+  background: #dff3e7;
+}
+
+.app-notice-success .app-notice-icon {
+  background: #24764d;
+}
+
+.app-notice-warning {
+  border-color: #e2c080;
+  color: #7a421e;
+  background: #fff0d7;
+}
+
+.app-notice-warning .app-notice-icon {
+  background: #9a5a18;
+}
+
+.app-notice-error {
+  border-color: #e6c5c2;
+  color: #8d2f2b;
+  background: #fbe4e1;
+}
+
+.app-notice-error .app-notice-icon {
+  background: #b33b35;
+}
+
+.app-notice-info {
+  border-color: #c5ddeb;
+  color: #28566f;
+  background: #e0eef6;
+}
+
+.app-notice-info .app-notice-icon {
+  background: #2f6584;
+}
+
+.app-dialog {
+  max-height: min(90dvh, 56rem);
+  max-width: calc(100vw - 1.5rem);
+  margin: auto;
+  overscroll-behavior: contain;
+  overflow-y: auto;
+}
+
+.app-dialog::backdrop {
+  background: rgb(16 42 46 / 58%);
+  backdrop-filter: blur(2px);
+}
+
+.app-dialog-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 480px) {
+  .app-dialog-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

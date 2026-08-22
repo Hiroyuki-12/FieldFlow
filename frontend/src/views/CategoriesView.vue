@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import {
   type CategoryStatus,
@@ -10,6 +10,8 @@ import {
   updateCategoryStatus,
 } from '../api/categories';
 import { ApiError } from '../api/errors';
+import { useModalDialog } from '../composables/useModalDialog';
+import AppNotice from '../components/AppNotice.vue';
 
 type DialogMode = 'create' | 'edit' | 'status' | null;
 
@@ -21,10 +23,9 @@ const isSaving = ref(false);
 const notice = ref('');
 const errorMessage = ref('');
 const dialogMode = ref<DialogMode>(null);
-const dialog = ref<HTMLDialogElement | null>(null);
+const { dialog, openModal, closeModal, trapFocus } = useModalDialog();
 const selectedCategory = ref<ManagedCategory | null>(null);
 const form = ref({ name: '', displayOrder: 0 });
-let dialogTrigger: HTMLElement | null = null;
 
 const dialogTitle = computed(() => {
   if (dialogMode.value === 'create') return '作業カテゴリを作成';
@@ -36,18 +37,8 @@ const dialogTitle = computed(() => {
 
 watch(dialogMode, async (mode) => {
   if (mode) {
-    await nextTick();
-    if (!dialog.value?.open) {
-      if (typeof dialog.value?.showModal === 'function')
-        dialog.value.showModal();
-      else dialog.value?.setAttribute('open', '');
-    }
-    dialog.value?.querySelector<HTMLElement>('input, button')?.focus();
-  } else if (dialog.value?.open) {
-    if (typeof dialog.value.close === 'function') dialog.value.close();
-    else dialog.value.removeAttribute('open');
-    dialogTrigger?.focus();
-  }
+    await openModal('input, button');
+  } else closeModal();
 });
 
 onMounted(loadCategories);
@@ -68,25 +59,22 @@ async function loadCategories(): Promise<void> {
   }
 }
 
-function openCreate(event: Event): void {
+function openCreate(): void {
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedCategory.value = null;
   form.value = { name: '', displayOrder: 0 };
   dialogMode.value = 'create';
 }
 
-function openEdit(category: ManagedCategory, event: Event): void {
+function openEdit(category: ManagedCategory): void {
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedCategory.value = category;
   form.value = { name: category.name, displayOrder: category.displayOrder };
   dialogMode.value = 'edit';
 }
 
-function openStatus(category: ManagedCategory, event: Event): void {
+function openStatus(category: ManagedCategory): void {
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedCategory.value = category;
   dialogMode.value = 'status';
 }
@@ -183,7 +171,9 @@ function messageFor(error: unknown): string {
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="mb-1 text-sm font-bold text-[#0b6b62]">管理機能</p>
-        <h1 class="text-3xl font-black tracking-tight">作業カテゴリ管理</h1>
+        <h1 class="text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+          作業カテゴリ管理
+        </h1>
         <p class="mt-2 text-sm text-[#49666a]">
           日別チェックで選ぶ作業と、その道具のまとまりを管理します。
         </p>
@@ -197,20 +187,12 @@ function messageFor(error: unknown): string {
       </button>
     </div>
 
-    <p
-      v-if="notice"
-      class="mb-5 rounded-xl bg-[#d8eee8] p-4 text-sm text-[#074d47]"
-      role="status"
-    >
+    <AppNotice v-if="notice" class="mb-5" tone="success">
       {{ notice }}
-    </p>
-    <p
-      v-if="errorMessage && !dialogMode"
-      class="mb-5 rounded-xl bg-[#fbe4e1] p-4 text-sm text-[#8d2f2b]"
-      role="alert"
-    >
+    </AppNotice>
+    <AppNotice v-if="errorMessage && !dialogMode" class="mb-5" tone="error">
       {{ errorMessage }}
-    </p>
+    </AppNotice>
 
     <form
       class="mb-6 grid gap-3 rounded-2xl border border-[#cfdbd5] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
@@ -292,7 +274,7 @@ function messageFor(error: unknown): string {
           <button
             class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold"
             type="button"
-            @click="openEdit(category, $event)"
+            @click="openEdit(category)"
           >
             編集
           </button>
@@ -300,7 +282,7 @@ function messageFor(error: unknown): string {
             v-if="category.categoryType !== 'COMMON'"
             class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold"
             type="button"
-            @click="openStatus(category, $event)"
+            @click="openStatus(category)"
           >
             {{ category.status === 'ACTIVE' ? '利用停止' : '再有効化' }}
           </button>
@@ -310,13 +292,21 @@ function messageFor(error: unknown): string {
 
     <dialog
       ref="dialog"
-      class="m-auto w-[min(92vw,32rem)] rounded-2xl border-0 bg-white p-0 shadow-2xl backdrop:bg-black/45"
+      class="app-dialog w-[min(92vw,32rem)] rounded-2xl border-0 bg-white p-0 shadow-2xl"
+      aria-labelledby="category-dialog-title"
       @cancel.prevent="closeDialog"
+      @keydown="trapFocus"
     >
-      <div class="p-6" @keydown.esc="closeDialog">
-        <h2 class="text-xl font-black">{{ dialogTitle }}</h2>
+      <div class="max-h-[90dvh] overflow-y-auto p-6" @keydown.esc="closeDialog">
+        <h2
+          id="category-dialog-title"
+          class="sticky top-0 z-10 -mx-6 -mt-6 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
+        >
+          {{ dialogTitle }}
+        </h2>
         <p
           v-if="errorMessage"
+          id="category-dialog-error"
           class="mt-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
           role="alert"
         >
@@ -335,6 +325,8 @@ function messageFor(error: unknown): string {
               maxlength="50"
               required
               :disabled="selectedCategory?.categoryType === 'COMMON'"
+              :aria-invalid="Boolean(errorMessage)"
+              aria-describedby="category-dialog-error"
             />
           </label>
           <p
@@ -353,9 +345,11 @@ function messageFor(error: unknown): string {
               max="9999"
               step="1"
               required
+              :aria-invalid="Boolean(errorMessage)"
+              aria-describedby="category-dialog-error"
             />
           </label>
-          <div class="flex justify-end gap-3">
+          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -385,7 +379,7 @@ function messageFor(error: unknown): string {
           >
             利用中の道具が紐づいている場合は停止できません。過去の日別チェックの記録は削除されません。
           </p>
-          <div class="mt-6 flex justify-end gap-3">
+          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"

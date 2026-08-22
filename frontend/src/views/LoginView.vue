@@ -67,9 +67,9 @@ async function handleSubmit(): Promise<void> {
     >
       <div class="my-auto max-w-2xl">
         <p class="text-xs font-black tracking-[0.18em] text-[#f2a66f]">READY BEFORE THE FIELD</p>
-        <h1 class="mt-5 max-w-[10em] text-6xl font-black leading-[1.08] tracking-[-0.05em] xl:text-7xl">
+        <h2 class="mt-5 max-w-[10em] text-6xl font-black leading-[1.08] tracking-[-0.05em] xl:text-7xl">
           忘れ物のない朝を、チームでつくる。
-        </h1>
+        </h2>
         <p class="mt-7 max-w-xl text-lg leading-8 text-white/75">
           現場へ出る前の道具と数量を、ひとつのチェック表で共有。FieldFlowは準備の抜け漏れを減らします。
         </p>
@@ -84,7 +84,13 @@ async function handleSubmit(): Promise<void> {
           <span class="text-xl">FieldFlow</span>
         </div>
 
-        <h1 class="mt-8 text-3xl font-black tracking-tight">ログイン</h1>
+        <h1
+          class="mt-8 text-3xl font-black tracking-tight"
+          data-page-heading
+          tabindex="-1"
+        >
+          ログイン
+        </h1>
         <p class="mt-2 text-[#49666a]">今日の準備を始めましょう。</p>
 
         <p
@@ -106,7 +112,9 @@ async function handleSubmit(): Promise<void> {
               class="min-h-12 w-full rounded-xl border border-[#b9cbc4] bg-white px-4 outline-none transition focus:border-[#0b6b62] focus:ring-4 focus:ring-[#0b6b62]/15"
               placeholder="例: admin"
               :disabled="isSubmitting"
+              :aria-invalid="Boolean(errorMessage)"
               aria-describedby="login-error"
+              autofocus
             />
           </div>
 
@@ -121,11 +129,17 @@ async function handleSubmit(): Promise<void> {
               class="min-h-12 w-full rounded-xl border border-[#b9cbc4] bg-white px-4 outline-none transition focus:border-[#0b6b62] focus:ring-4 focus:ring-[#0b6b62]/15"
               placeholder="12文字以上"
               :disabled="isSubmitting"
+              :aria-invalid="Boolean(errorMessage)"
               aria-describedby="login-error"
             />
           </div>
 
-          <p id="login-error" class="min-h-6 text-sm font-bold text-[#b33b35]" aria-live="polite">
+          <p
+            id="login-error"
+            class="min-h-6 text-sm font-bold text-[#b33b35]"
+            :role="errorMessage ? 'alert' : undefined"
+            aria-live="assertive"
+          >
             {{ errorMessage }}
           </p>
 

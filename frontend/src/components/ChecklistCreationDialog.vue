@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import {
   type ChecklistCategoryOption,
@@ -11,6 +11,7 @@ import {
   updateDailyChecklistConfiguration,
 } from '../api/daily-checklists';
 import { ApiError } from '../api/errors';
+import { useModalDialog } from '../composables/useModalDialog';
 import { formatJapaneseDate } from '../utils/date';
 
 const props = defineProps<{
@@ -24,7 +25,7 @@ const emit = defineEmits<{
   saved: [checklist: DailyChecklist];
 }>();
 
-const dialog = ref<HTMLDialogElement | null>(null);
+const { dialog, openModal, closeModal, trapFocus } = useModalDialog();
 const categories = ref<ChecklistCategoryOption[]>([]);
 const scheduleMode = ref<ScheduleMode>('FULL_DAY');
 const activeSplitPeriod = ref<ChecklistPeriod>('MORNING');
@@ -51,20 +52,9 @@ watch(
   async (open) => {
     if (open) {
       resetForm();
-      await nextTick();
-      if (!dialog.value?.open) {
-        if (typeof dialog.value?.showModal === 'function')
-          dialog.value.showModal();
-        else dialog.value?.setAttribute('open', '');
-      }
-      dialog.value
-        ?.querySelector<HTMLElement>('input, button')
-        ?.focus();
+      await openModal('input, button');
       await loadCategories();
-    } else if (dialog.value?.open) {
-      if (typeof dialog.value.close === 'function') dialog.value.close();
-      else dialog.value.removeAttribute('open');
-    }
+    } else closeModal();
   },
 );
 
@@ -198,11 +188,12 @@ function messageFor(error: unknown): string {
 <template>
   <dialog
     ref="dialog"
-    class="m-auto w-[min(94vw,42rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl backdrop:bg-black/50"
+    class="app-dialog w-[min(94vw,42rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl"
     aria-labelledby="checklist-form-title"
     @cancel.prevent="requestClose"
+    @keydown="trapFocus"
   >
-    <form class="flex max-h-[90vh] flex-col" @submit.prevent="submit">
+    <form class="flex max-h-[90dvh] flex-col" @submit.prevent="submit">
       <header class="shrink-0 border-b border-[#cfdbd5] px-5 py-5 sm:px-7">
         <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">
           {{ isEditing ? 'EDIT DAILY CHECK' : 'NEW DAILY CHECK' }}
@@ -356,7 +347,7 @@ function messageFor(error: unknown): string {
       </div>
 
       <footer
-        class="flex shrink-0 justify-end gap-3 border-t border-[#cfdbd5] bg-[#fffdf8] px-5 py-4 sm:px-7"
+        class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-[#fffdf8] px-5 py-4 sm:px-7"
       >
         <button
           type="button"

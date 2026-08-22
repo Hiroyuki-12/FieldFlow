@@ -1,4 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
+import { render } from '@testing-library/vue';
 import { createMemoryHistory } from 'vue-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -119,5 +120,32 @@ describe('Router Guard', () => {
     expect(sanitizeInternalRedirect('/password')).toBe('/password');
     expect(sanitizeInternalRedirect('//attacker.example')).toBeNull();
     expect(sanitizeInternalRedirect('https://attacker.example')).toBeNull();
+  });
+
+  it('画面遷移後に新しい画面見出しへフォーカスを移す', async () => {
+    // ルート変更後も前画面の操作位置へフォーカスが残る回帰を防ぐ。
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const router = createAppRouter(pinia, createMemoryHistory());
+    router.addRoute({
+      path: '/focus-before',
+      component: {
+        template:
+          '<h1 data-page-heading tabindex="-1">遷移前の見出し</h1>',
+      },
+    });
+    router.addRoute({
+      path: '/focus-after',
+      component: {
+        template:
+          '<h1 data-page-heading tabindex="-1">遷移後の見出し</h1>',
+      },
+    });
+    await router.push('/focus-before');
+    render({ template: '<RouterView />' }, { global: { plugins: [pinia, router] } });
+
+    await router.push('/focus-after');
+
+    expect(document.activeElement).toHaveTextContent('遷移後の見出し');
   });
 });

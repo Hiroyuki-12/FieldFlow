@@ -1,4 +1,5 @@
 import type { Pinia } from 'pinia';
+import { nextTick } from 'vue';
 import {
   createRouter,
   createWebHistory,
@@ -39,6 +40,8 @@ export function createAppRouter(
 ) {
   const router = createRouter({
     history,
+    scrollBehavior: () =>
+      import.meta.env.MODE === 'test' ? false : { top: 0 },
     routes: [
       {
         path: '/login',
@@ -139,6 +142,12 @@ export function createAppRouter(
     }
 
     return true;
+  });
+
+  router.afterEach(async () => {
+    await nextTick();
+    // 画面遷移後に見出しへフォーカスし、表示内容が変わったことを支援技術へ伝える。
+    document.querySelector<HTMLElement>('[data-page-heading]')?.focus();
   });
 
   return router;

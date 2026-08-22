@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { render, screen } from '@testing-library/vue';
+import { fireEvent, render, screen } from '@testing-library/vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -110,5 +110,60 @@ describe('AppLayout', () => {
     expect(
       screen.getAllByRole('link', { name: '日別チェック' }),
     ).not.toHaveLength(0);
+  });
+
+  it('モバイルメニューは初期フォーカスを移し、Escで起点へ戻す', async () => {
+    // メニューを閉じたあとキーボード利用者が操作位置を見失う回帰を防ぐ。
+    const authStore = useAuthStore();
+    authStore.applySession({
+      accessToken: 'worker-token',
+      expiresIn: 900,
+      user: {
+        id: 'worker-1',
+        name: '作業者',
+        loginId: 'worker01',
+        role: 'WORKER',
+        mustChangePassword: false,
+      },
+    });
+    const router = createLayoutRouter();
+    await router.push('/');
+    render(AppLayout, { global: { plugins: [router] } });
+
+    const menuButton = screen.getByRole('button', { name: 'メニューを開く' });
+    menuButton.focus();
+    await fireEvent.click(menuButton);
+
+    const mobileNavigation = document.querySelector('#mobile-navigation');
+    expect(mobileNavigation).toBeInTheDocument();
+    expect(mobileNavigation?.querySelector('a')).toHaveFocus();
+
+    await fireEvent.keyDown(mobileNavigation as HTMLElement, { key: 'Escape' });
+    expect(screen.queryByLabelText('モバイルナビゲーション')).not.toBeInTheDocument();
+    expect(menuButton).toHaveFocus();
+  });
+
+  it('現在のナビゲーション項目をaria-currentで示す', async () => {
+    const authStore = useAuthStore();
+    authStore.applySession({
+      accessToken: 'worker-token',
+      expiresIn: 900,
+      user: {
+        id: 'worker-1',
+        name: '作業者',
+        loginId: 'worker01',
+        role: 'WORKER',
+        mustChangePassword: false,
+      },
+    });
+    const router = createLayoutRouter();
+    await router.push('/tools');
+    render(AppLayout, { global: { plugins: [router] } });
+
+    expect(
+      screen
+        .getAllByRole('link', { name: '道具管理' })
+        .some((link) => link.getAttribute('aria-current') === 'page'),
+    ).toBe(true);
   });
 });

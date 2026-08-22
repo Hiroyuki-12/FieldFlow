@@ -22,6 +22,15 @@ describe('LoginView', () => {
     expect(
       screen.getByText('ログインIDと12文字以上のパスワードを入力してください。'),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText('ログインID')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.getByLabelText('パスワード')).toHaveAttribute(
+      'aria-describedby',
+      'login-error',
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('12文字以上');
   });
 
   it('初回ユーザーはLogin成功後に初回パスワード変更へ進む', async () => {

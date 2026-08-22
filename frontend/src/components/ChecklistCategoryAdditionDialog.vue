@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import {
   addDailyChecklistCategories,
@@ -9,6 +9,7 @@ import {
   listChecklistCategoryOptions,
 } from '../api/daily-checklists';
 import { ApiError } from '../api/errors';
+import { useModalDialog } from '../composables/useModalDialog';
 import { formatJapaneseDate } from '../utils/date';
 
 const props = defineProps<{
@@ -23,7 +24,7 @@ const emit = defineEmits<{
   saved: [checklist: DailyChecklist];
 }>();
 
-const dialog = ref<HTMLDialogElement | null>(null);
+const { dialog, openModal, closeModal, trapFocus } = useModalDialog();
 const categories = ref<ChecklistCategoryOption[]>([]);
 const selectedCategoryIds = ref<string[]>([]);
 const isLoading = ref(false);
@@ -41,18 +42,9 @@ watch(
       selectedCategoryIds.value = [];
       categories.value = [];
       errorMessage.value = '';
-      await nextTick();
-      if (!dialog.value?.open) {
-        if (typeof dialog.value?.showModal === 'function')
-          dialog.value.showModal();
-        else dialog.value?.setAttribute('open', '');
-      }
-      dialog.value?.querySelector<HTMLElement>('button, input')?.focus();
+      await openModal('button, input');
       await loadCategories();
-    } else if (dialog.value?.open) {
-      if (typeof dialog.value.close === 'function') dialog.value.close();
-      else dialog.value.removeAttribute('open');
-    }
+    } else closeModal();
   },
 );
 
@@ -123,11 +115,12 @@ function messageFor(error: unknown): string {
 <template>
   <dialog
     ref="dialog"
-    class="m-auto w-[min(94vw,38rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl backdrop:bg-black/50"
+    class="app-dialog w-[min(94vw,38rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl"
     aria-labelledby="category-addition-title"
     @cancel.prevent="requestClose"
+    @keydown="trapFocus"
   >
-    <form class="flex max-h-[90vh] flex-col" @submit.prevent="submit">
+    <form class="flex max-h-[90dvh] flex-col" @submit.prevent="submit">
       <header class="shrink-0 border-b border-[#cfdbd5] px-5 py-5 sm:px-7">
         <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">ADD WORK CATEGORY</p>
         <h2 id="category-addition-title" class="mt-1 text-2xl font-black">
@@ -183,7 +176,7 @@ function messageFor(error: unknown): string {
         </fieldset>
       </div>
 
-      <footer class="flex shrink-0 justify-end gap-3 border-t border-[#cfdbd5] bg-[#fffdf8] px-5 py-4 sm:px-7">
+      <footer class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-[#fffdf8] px-5 py-4 sm:px-7">
         <button
           class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold"
           type="button"

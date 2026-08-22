@@ -32,5 +32,10 @@ describe('PasswordChangeView', () => {
     await fireEvent.click(screen.getByRole('button', { name: '変更して再ログイン' }));
 
     expect(screen.getByText('新しいパスワードと確認入力が一致していません。')).toBeInTheDocument();
+    expect(screen.getByLabelText('新しいパスワード')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.getByRole('alert')).toHaveAttribute('id', 'password-error');
   });
 });

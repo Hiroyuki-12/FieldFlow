@@ -16,6 +16,8 @@
     "seed:run": "ts-node src/database/seeds/seed.cli.ts",
     "seed:e2e": "ts-node src/database/seeds/e2e-seed.cli.ts",
     "e2e:db:create": "ts-node src/database/seeds/e2e-database.cli.ts",
+    "seed:perf": "ts-node src/database/seeds/performance-seed.cli.ts",
+    "perf:db:create": "ts-node src/database/seeds/performance-database.cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format": "prettier --write \"{src,test}/**/*.ts\"",

@@ -43,6 +43,7 @@
 - [ロードマップ12 UI・アクセシビリティ 実装計画](plans/roadmap-12-ui-accessibility.md)
 - [ロードマップ13 ログ・運用・セキュリティ 実装計画](plans/roadmap-13-logging-operations-security.md)
 - [ロードマップ14 Playwright E2E 実装計画](plans/roadmap-14-playwright-e2e.md)
+- [ロードマップ15 k6性能試験 実装計画](plans/roadmap-15-k6-performance.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係
@@ -53,6 +54,6 @@
 | ユーザー | `features/users.md` | SCR-21 | USER-* | users | UT-USER / IT-USER / E2E-ADMIN |
 | 作業カテゴリ | `features/categories.md` | SCR-22 | CAT-* | categories | UT-CAT / IT-CAT / E2E-ADMIN |
 | 道具 | `features/tools.md` | SCR-23 | TOOL-* | tools | UT-TOOL / IT-TOOL / E2E-ADMIN |
-| 日別チェック | `features/daily-checklists.md` | SCR-10,11 | CHECK-* | daily_checklists / daily_checklist_periods / daily_checklist_period_categories / daily_checklist_items | UT-CHECK / IT-CHECK / E2E-CHECK / PERF-CHECK |
+| 日別チェック | `features/daily-checklists.md` | SCR-10,11 | CHECK-* | daily_checklists / daily_checklist_periods / daily_checklist_period_categories / daily_checklist_items | UT-CHECK / IT-CHECK / E2E-CHECK / [PERF-CHECK](../perf/scenarios/checklist.ts) |
 
 完全な対応表は[トレーサビリティ](design/traceability.md)を参照する。

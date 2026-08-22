@@ -1,0 +1,139 @@
+name: Performance
+
+on:
+  # 3分の負荷試験を通常PRへ追加せず、リリース候補や性能変更時に明示実行する。
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 実行するk6シナリオ
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - smoke
+          - checklist
+          - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  k6:
+    name: k6 ${{ inputs.scenario }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # job終了時に破棄される性能試験専用DBと架空認証情報だけを使用する。
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      PORT: 8080
+      CORS_ORIGIN: http://localhost:5173
+      TRUST_PROXY_HOPS: 0
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: fieldflow_perf
+      DB_USER: fieldflow
+      DB_PASSWORD: fieldflow_perf_ci
+      JWT_ACCESS_SECRET: performance-ci-only-jwt-secret-at-least-32-bytes
+      JWT_ACCESS_TTL_SECONDS: 900
+      REFRESH_TOKEN_TTL_SECONDS: 604800
+      COOKIE_SECURE: false
+      PERF_BASE_URL: http://localhost:8080
+      PERF_WORKER_PASSWORD: Perf-CI-Worker-Password-2026
+      PERF_ALLOW_REMOTE_TARGET: false
+
+    services:
+      mysql:
+        image: mysql:8.4.10
+        env:
+          MYSQL_ROOT_PASSWORD: fieldflow_perf_root
+          MYSQL_DATABASE: fieldflow_perf
+          MYSQL_USER: fieldflow
+          MYSQL_PASSWORD: fieldflow_perf_ci
+          TZ: UTC
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=fieldflow_perf_root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: ソースコードを取得する
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node.jsとnpmキャッシュを準備する
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            perf/package-lock.json
+
+      - name: k6を固定バージョンで準備する
+        uses: grafana/setup-k6-action@db07bd9765aac508ef18982e52ab937fe633a065 # v1.2.1
+        with:
+          k6-version: 2.0.0
+
+      - name: Backend依存パッケージをインストールする
+        working-directory: backend
+        run: npm ci
+
+      - name: 性能試験依存パッケージをインストールする
+        working-directory: perf
+        run: npm ci
+
+      - name: k6コードを型チェックする
+        working-directory: perf
+        run: npm run typecheck
+
+      - name: 性能試験専用DBへMigrationとSeedを適用する
+        working-directory: backend
+        run: |
+          npm run migration:run
+          npm run seed:perf
+
+      - name: Backendをbuildして起動する
+        working-directory: backend
+        run: |
+          npm run build
+          npm run start > ../perf/backend-performance.log 2>&1 &
+
+      - name: Backendの起動完了を待つ
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8080/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not become ready" >&2
+          exit 1
+
+      - name: 選択したk6シナリオを実行する
+        run: bash perf/run.sh "${{ inputs.scenario }}"
+
+      - name: k6結果を保存する
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: k6-${{ inputs.scenario }}-${{ github.sha }}
+          path: perf/results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: 失敗時のBackendログを保存する
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: k6-backend-failure-${{ github.sha }}
+          path: perf/backend-performance.log
+          if-no-files-found: warn
+          retention-days: 7

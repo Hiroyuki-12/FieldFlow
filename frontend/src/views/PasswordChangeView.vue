@@ -72,7 +72,12 @@ async function backToLogin(): Promise<void> {
       <p class="mt-6 text-xs font-black tracking-[0.16em] text-[#0b6b62]">
         {{ isInitial ? 'FIRST SIGN IN' : 'ACCOUNT SECURITY' }}
       </p>
-      <h1 :id="isInitial ? 'initial-password-title' : 'password-title'" class="mt-2 text-3xl font-black tracking-tight">
+      <h1
+        :id="isInitial ? 'initial-password-title' : 'password-title'"
+        class="mt-2 text-3xl font-black tracking-tight"
+        data-page-heading
+        tabindex="-1"
+      >
         {{ isInitial ? '初回パスワード変更' : 'パスワード変更' }}
       </h1>
       <p class="mt-3 leading-7 text-[#49666a]">
@@ -95,6 +100,9 @@ async function backToLogin(): Promise<void> {
             autocomplete="current-password"
             class="min-h-12 w-full rounded-xl border border-[#b9cbc4] bg-white px-4 outline-none focus:border-[#0b6b62] focus:ring-4 focus:ring-[#0b6b62]/15"
             :disabled="isSubmitting"
+            :aria-invalid="Boolean(errorMessage)"
+            aria-describedby="password-error"
+            autofocus
           />
         </div>
         <div>
@@ -107,6 +115,8 @@ async function backToLogin(): Promise<void> {
             class="min-h-12 w-full rounded-xl border border-[#b9cbc4] bg-white px-4 outline-none focus:border-[#0b6b62] focus:ring-4 focus:ring-[#0b6b62]/15"
             placeholder="12文字以上"
             :disabled="isSubmitting"
+            :aria-invalid="Boolean(errorMessage)"
+            aria-describedby="password-error"
           />
         </div>
         <div>
@@ -118,11 +128,17 @@ async function backToLogin(): Promise<void> {
             autocomplete="new-password"
             class="min-h-12 w-full rounded-xl border border-[#b9cbc4] bg-white px-4 outline-none focus:border-[#0b6b62] focus:ring-4 focus:ring-[#0b6b62]/15"
             :disabled="isSubmitting"
+            :aria-invalid="Boolean(errorMessage)"
             aria-describedby="password-error"
           />
         </div>
 
-        <p id="password-error" class="min-h-6 text-sm font-bold text-[#b33b35]" aria-live="polite">
+        <p
+          id="password-error"
+          class="min-h-6 text-sm font-bold text-[#b33b35]"
+          :role="errorMessage ? 'alert' : undefined"
+          aria-live="assertive"
+        >
           {{ errorMessage }}
         </p>
 

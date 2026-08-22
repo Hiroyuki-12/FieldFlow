@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { type DailyChecklist, getDailyChecklist } from '../api/daily-checklists';
 import { ApiError } from '../api/errors';
 import ChecklistCreationDialog from '../components/ChecklistCreationDialog.vue';
+import AppNotice from '../components/AppNotice.vue';
 import { useAuthStore } from '../stores/auth';
 import { formatJapaneseDate, todayInTokyo } from '../utils/date';
 
@@ -95,7 +96,11 @@ function messageFor(error: unknown): string {
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">HOME</p>
-        <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+        <h1
+          class="mt-2 text-3xl font-black tracking-tight sm:text-4xl"
+          data-page-heading
+          tabindex="-1"
+        >
           おはようございます、{{ authStore.user?.name }}さん
         </h1>
         <p class="mt-3 text-[#49666a]">
@@ -104,16 +109,12 @@ function messageFor(error: unknown): string {
       </div>
     </div>
 
-    <p
-      v-if="errorMessage"
-      class="mt-6 rounded-xl bg-[#fbe4e1] p-4 text-sm text-[#8d2f2b]"
-      role="alert"
-    >
+    <AppNotice v-if="errorMessage" class="mt-6" tone="error" title="今日のチェック表を読み込めませんでした">
       {{ errorMessage }}
-      <button class="ml-2 underline" type="button" @click="loadTodayChecklist">
+      <button class="ml-2 min-h-11 font-bold underline" type="button" @click="loadTodayChecklist">
         再読み込み
       </button>
-    </p>
+    </AppNotice>
 
     <section
       class="mt-8 rounded-3xl border border-[#cfdbd5] bg-[#fffdf8] p-6 shadow-sm sm:p-8"

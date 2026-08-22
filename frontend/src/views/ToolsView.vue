@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { ApiError } from '../api/errors';
 import {
@@ -12,6 +12,8 @@ import {
   updateToolStatus,
 } from '../api/tools';
 import { useAuthStore } from '../stores/auth';
+import { useModalDialog } from '../composables/useModalDialog';
+import AppNotice from '../components/AppNotice.vue';
 
 type DialogMode = 'create' | 'edit' | 'status' | null;
 
@@ -29,7 +31,7 @@ const isSaving = ref(false);
 const notice = ref('');
 const errorMessage = ref('');
 const dialogMode = ref<DialogMode>(null);
-const dialog = ref<HTMLDialogElement | null>(null);
+const { dialog, openModal, closeModal, trapFocus } = useModalDialog();
 const selectedTool = ref<ManagedTool | null>(null);
 const form = ref({
   name: '',
@@ -37,7 +39,6 @@ const form = ref({
   stockQuantity: 0,
   displayOrder: 0,
 });
-let dialogTrigger: HTMLElement | null = null;
 
 const isAdmin = computed(() => authStore.user?.role === 'ADMIN');
 const pageCount = computed(() =>
@@ -56,18 +57,8 @@ const dialogTitle = computed(() => {
 
 watch(dialogMode, async (mode) => {
   if (mode) {
-    await nextTick();
-    if (!dialog.value?.open) {
-      if (typeof dialog.value?.showModal === 'function')
-        dialog.value.showModal();
-      else dialog.value?.setAttribute('open', '');
-    }
-    dialog.value?.querySelector<HTMLElement>('input, select, button')?.focus();
-  } else if (dialog.value?.open) {
-    if (typeof dialog.value.close === 'function') dialog.value.close();
-    else dialog.value.removeAttribute('open');
-    dialogTrigger?.focus();
-  }
+    await openModal('input, select, button');
+  } else closeModal();
 });
 
 onMounted(loadTools);
@@ -110,10 +101,9 @@ async function movePage(nextPage: number): Promise<void> {
   await loadTools();
 }
 
-function openCreate(event: Event): void {
+function openCreate(): void {
   if (!isAdmin.value) return;
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedTool.value = null;
   form.value = {
     name: '',
@@ -124,10 +114,9 @@ function openCreate(event: Event): void {
   dialogMode.value = 'create';
 }
 
-function openEdit(tool: ManagedTool, event: Event): void {
+function openEdit(tool: ManagedTool): void {
   if (!isAdmin.value) return;
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedTool.value = tool;
   form.value = {
     name: tool.name,
@@ -138,10 +127,9 @@ function openEdit(tool: ManagedTool, event: Event): void {
   dialogMode.value = 'edit';
 }
 
-function openStatus(tool: ManagedTool, event: Event): void {
+function openStatus(tool: ManagedTool): void {
   if (!isAdmin.value) return;
   errorMessage.value = '';
-  dialogTrigger = event.currentTarget as HTMLElement;
   selectedTool.value = tool;
   dialogMode.value = 'status';
 }
@@ -247,7 +235,9 @@ function messageFor(error: unknown): string {
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="mb-1 text-sm font-bold text-[#0b6b62]">道具マスター</p>
-        <h1 class="text-3xl font-black tracking-tight">道具管理</h1>
+        <h1 class="text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+          道具管理
+        </h1>
         <p class="mt-2 text-sm text-[#49666a]">
           日別チェックで使う道具、所属カテゴリ、チームの保有数を確認します。
         </p>
@@ -262,20 +252,12 @@ function messageFor(error: unknown): string {
       </button>
     </div>
 
-    <p
-      v-if="notice"
-      class="mb-5 rounded-xl bg-[#d8eee8] p-4 text-sm text-[#074d47]"
-      role="status"
-    >
+    <AppNotice v-if="notice" class="mb-5" tone="success">
       {{ notice }}
-    </p>
-    <p
-      v-if="errorMessage && !dialogMode"
-      class="mb-5 rounded-xl bg-[#fbe4e1] p-4 text-sm text-[#8d2f2b]"
-      role="alert"
-    >
+    </AppNotice>
+    <AppNotice v-if="errorMessage && !dialogMode" class="mb-5" tone="error">
       {{ errorMessage }}
-    </p>
+    </AppNotice>
 
     <form
       class="mb-6 grid gap-3 rounded-2xl border border-[#cfdbd5] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)_10rem_auto] md:items-end"
@@ -379,14 +361,14 @@ function messageFor(error: unknown): string {
           <button
             class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold"
             type="button"
-            @click="openEdit(tool, $event)"
+            @click="openEdit(tool)"
           >
             編集
           </button>
           <button
             class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold"
             type="button"
-            @click="openStatus(tool, $event)"
+            @click="openStatus(tool)"
           >
             {{ tool.status === 'ACTIVE' ? '利用停止' : '再有効化' }}
           </button>
@@ -420,13 +402,21 @@ function messageFor(error: unknown): string {
 
     <dialog
       ref="dialog"
-      class="m-auto w-[min(92vw,34rem)] rounded-2xl border-0 bg-white p-0 shadow-2xl backdrop:bg-black/45"
+      class="app-dialog w-[min(92vw,34rem)] rounded-2xl border-0 bg-white p-0 shadow-2xl"
+      aria-labelledby="tool-dialog-title"
       @cancel.prevent="closeDialog"
+      @keydown="trapFocus"
     >
-      <div class="p-6" @keydown.esc="closeDialog">
-        <h2 class="text-xl font-black">{{ dialogTitle }}</h2>
+      <div class="max-h-[90dvh] overflow-y-auto p-6" @keydown.esc="closeDialog">
+        <h2
+          id="tool-dialog-title"
+          class="sticky top-0 z-10 -mx-6 -mt-6 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
+        >
+          {{ dialogTitle }}
+        </h2>
         <p
           v-if="errorMessage"
+          id="tool-dialog-error"
           class="mt-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
           role="alert"
         >
@@ -444,6 +434,8 @@ function messageFor(error: unknown): string {
               class="min-h-11 w-full rounded-xl border px-3"
               maxlength="100"
               required
+              :aria-invalid="Boolean(errorMessage)"
+              aria-describedby="tool-dialog-error"
             />
           </label>
           <label class="block">
@@ -452,6 +444,8 @@ function messageFor(error: unknown): string {
               v-model="form.categoryId"
               class="min-h-11 w-full rounded-xl border px-3"
               required
+              :aria-invalid="Boolean(errorMessage)"
+              aria-describedby="tool-dialog-error"
             >
               <option value="" disabled>選択してください</option>
               <option
@@ -476,6 +470,8 @@ function messageFor(error: unknown): string {
                 max="9999"
                 step="1"
                 required
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="tool-dialog-error"
               />
             </label>
             <label class="block">
@@ -488,13 +484,15 @@ function messageFor(error: unknown): string {
                 max="9999"
                 step="1"
                 required
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="tool-dialog-error"
               />
             </label>
           </div>
           <p class="text-sm text-[#49666a]">
             保有数はチームの総数です。日別の持ち出し操作では増減しません。
           </p>
-          <div class="flex justify-end gap-3">
+          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -521,7 +519,7 @@ function messageFor(error: unknown): string {
           <p class="mt-2 text-sm text-[#49666a]">
             過去の日別チェックの記録は削除されません。
           </p>
-          <div class="mt-6 flex justify-end gap-3">
+          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"

@@ -111,6 +111,29 @@ async function renderChecklist(date: string) {
 describe('DailyChecklistView', () => {
   beforeEach(() => setActivePinia(createPinia()));
 
+  it('モバイル用の日付・時間帯設定を開閉状態付きで提供する', async () => {
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(splitChecklist('2026-08-18')),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+    await screen.findByText('ほうき');
+
+    const toggle = screen.getByRole('button', { name: '変更する' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute(
+      'aria-controls',
+      'date-period-settings-content',
+    );
+
+    await fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: '閉じる' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   it('午前・午後を切り替えて独立したカテゴリと道具を表示する', async () => {
     server.use(
       http.get('*/api/v1/daily-checklists/2026-08-18', () =>

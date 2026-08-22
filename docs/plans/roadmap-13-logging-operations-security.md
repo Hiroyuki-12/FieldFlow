@@ -6,7 +6,7 @@ FieldFlow Backendへ、画面で発生したエラーをrequestIdから追跡で
 
 対応Issueは [#31 ロードマップ13 ログ・運用・セキュリティを強化する](https://github.com/Hiroyuki-12/FieldFlow/issues/31) とする。
 
-ロードマップ12のUI・アクセシビリティ仕上げは未実装だが、本IssueはBackendの横断基盤を対象とし、画面構成へ依存しないため先行して実装する。
+ロードマップ13着手時点ではロードマップ12のUI・アクセシビリティ仕上げは未実装だったが、本IssueはBackendの横断基盤を対象とし、画面構成へ依存しないため先行して実装した。
 
 ## 2. requestId・JSONログ
 

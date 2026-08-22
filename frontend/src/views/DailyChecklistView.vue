@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -13,6 +13,8 @@ import {
 import { ApiError } from '../api/errors';
 import ChecklistCategoryAdditionDialog from '../components/ChecklistCategoryAdditionDialog.vue';
 import ChecklistCreationDialog from '../components/ChecklistCreationDialog.vue';
+import AppNotice from '../components/AppNotice.vue';
+import { useModalDialog } from '../composables/useModalDialog';
 import { formatJapaneseDate, todayInTokyo } from '../utils/date';
 
 const route = useRoute();
@@ -26,7 +28,13 @@ const isMissing = ref(false);
 const creationDialogOpen = ref(false);
 const categoryAdditionDialogOpen = ref(false);
 const deleteDialogOpen = ref(false);
-const deleteDialog = ref<HTMLDialogElement | null>(null);
+const {
+  dialog: deleteDialog,
+  openModal: openDeleteModal,
+  closeModal: closeDeleteModal,
+  trapFocus: trapDeleteDialogFocus,
+} = useModalDialog();
+const settingsExpanded = ref(false);
 const isDeleting = ref(false);
 const deleteErrorMessage = ref('');
 const errorMessage = ref('');
@@ -149,20 +157,9 @@ watch(
 );
 
 watch(deleteDialogOpen, async (open) => {
-  await nextTick();
   if (open) {
-    if (!deleteDialog.value?.open) {
-      if (typeof deleteDialog.value?.showModal === 'function')
-        deleteDialog.value.showModal();
-      else deleteDialog.value?.setAttribute('open', '');
-    }
-    deleteDialog.value
-      ?.querySelector<HTMLElement>('button')
-      ?.focus();
-  } else if (deleteDialog.value?.open) {
-    if (typeof deleteDialog.value.close === 'function') deleteDialog.value.close();
-    else deleteDialog.value.removeAttribute('open');
-  }
+    await openDeleteModal('button');
+  } else closeDeleteModal();
 });
 
 async function loadChecklist(): Promise<void> {
@@ -570,7 +567,13 @@ function deleteMessageFor(error: unknown): string {
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">DAILY CHECK</p>
-        <h1 class="mt-2 text-3xl font-black tracking-tight">日別チェック</h1>
+        <h1
+          class="mt-2 text-3xl font-black tracking-tight"
+          data-page-heading
+          tabindex="-1"
+        >
+          日別チェック
+        </h1>
         <p class="mt-2 text-[#49666a]">
           {{ formatJapaneseDate(workDate) }}の持ち出し準備
         </p>
@@ -585,73 +588,107 @@ function deleteMessageFor(error: unknown): string {
 
     <section
       class="mt-6 rounded-2xl border border-[#cfdbd5] bg-white p-4 sm:p-5"
-      aria-label="日付と時間帯"
+      aria-labelledby="date-period-settings-title"
     >
-      <form class="flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="moveToSelectedDate">
-        <label class="sm:w-56">
-          <span class="mb-1 block text-sm font-bold">作業日</span>
-          <input
-            v-model="selectedDate"
-            class="min-h-11 w-full rounded-xl border border-[#aebfba] px-3"
-            type="date"
-            required
-          />
-        </label>
-        <div class="flex flex-wrap gap-2">
-          <button class="min-h-11 rounded-xl bg-[#102a2e] px-5 font-bold text-white" type="submit">
-            この日を表示
-          </button>
-          <button class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold" type="button" @click="moveToToday">
-            今日
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="date-period-settings-title" class="font-black sm:sr-only">日付と時間帯</h2>
+        <button
+          class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold sm:hidden"
+          type="button"
+          :aria-expanded="settingsExpanded"
+          aria-controls="date-period-settings-content"
+          @click="settingsExpanded = !settingsExpanded"
+        >
+          {{ settingsExpanded ? '閉じる' : '変更する' }}
+        </button>
+      </div>
+      <div
+        id="date-period-settings-content"
+        class="mt-4 sm:mt-0 sm:block"
+        :class="settingsExpanded ? 'block' : 'hidden'"
+      >
+        <form
+          class="flex flex-col gap-3 sm:flex-row sm:items-end"
+          @submit.prevent="moveToSelectedDate"
+        >
+          <label class="sm:w-56">
+            <span class="mb-1 block text-sm font-bold">作業日</span>
+            <input
+              v-model="selectedDate"
+              class="min-h-11 w-full rounded-xl border border-[#aebfba] px-3"
+              type="date"
+              required
+            />
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button
+              class="min-h-11 rounded-xl bg-[#102a2e] px-5 font-bold text-white"
+              type="submit"
+            >
+              この日を表示
+            </button>
+            <button
+              class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold"
+              type="button"
+              @click="moveToToday"
+            >
+              今日
+            </button>
+          </div>
+        </form>
+
+        <div
+          v-if="checklist && checklist.periods.length > 1"
+          class="mt-5 grid grid-cols-2 rounded-xl bg-[#e8eee9] p-1"
+          role="group"
+          aria-label="時間帯を切り替え"
+        >
+          <button
+            v-for="period in checklist.periods"
+            :key="period.id"
+            class="min-h-11 rounded-lg px-4 font-bold"
+            :class="
+              selectedPeriod === period.period ? 'bg-white shadow-sm' : ''
+            "
+            type="button"
+            :aria-pressed="selectedPeriod === period.period"
+            @click="selectedPeriod = period.period"
+          >
+            {{ periodLabel(period.period) }}
           </button>
         </div>
-      </form>
-
-      <div
-        v-if="checklist && checklist.periods.length > 1"
-        class="mt-5 grid grid-cols-2 rounded-xl bg-[#e8eee9] p-1"
-        role="group"
-        aria-label="時間帯を切り替え"
-      >
-        <button
-          v-for="period in checklist.periods"
-          :key="period.id"
-          class="min-h-11 rounded-lg px-4 font-bold"
-          :class="selectedPeriod === period.period ? 'bg-white shadow-sm' : ''"
-          type="button"
-          :aria-pressed="selectedPeriod === period.period"
-          @click="selectedPeriod = period.period"
-        >
-          {{ periodLabel(period.period) }}
-        </button>
       </div>
     </section>
 
-    <p
-      v-if="noticeMessage"
-      class="mt-6 rounded-xl bg-[#d8eee8] p-4 text-sm font-bold text-[#24764d]"
-      role="status"
-    >
+    <AppNotice v-if="noticeMessage" class="mt-6" tone="success">
       {{ noticeMessage }}
-    </p>
-    <p
+    </AppNotice>
+    <AppNotice
       v-if="conflictSummary"
-      class="mt-4 rounded-xl bg-[#fff0df] p-4 text-sm font-bold text-[#7a421e]"
-      role="alert"
+      class="mt-4"
+      tone="warning"
+      title="他のユーザーによる更新を検出しました"
     >
       {{ conflictSummary }} 該当する道具行の内容を確認してください。
-    </p>
+    </AppNotice>
     <p v-if="isLoading" class="mt-8 text-center" role="status">
       日別チェックを読み込み中…
     </p>
-    <p
+    <AppNotice
       v-else-if="errorMessage"
-      class="mt-6 rounded-xl bg-[#fbe4e1] p-4 text-sm text-[#8d2f2b]"
-      role="alert"
+      class="mt-6"
+      tone="error"
+      title="日別チェックを読み込めませんでした"
     >
       {{ errorMessage }}
-      <button class="ml-2 underline" type="button" @click="loadChecklist">再読み込み</button>
-    </p>
+      <button
+        class="ml-2 min-h-11 font-bold underline"
+        type="button"
+        @click="loadChecklist"
+      >
+        再読み込み
+      </button>
+    </AppNotice>
 
     <section
       v-else-if="isMissing"
@@ -775,14 +812,14 @@ function deleteMessageFor(error: unknown): string {
         aria-label="カテゴリ一覧の開閉"
       >
         <button
-          class="min-h-10 rounded-xl border border-[#aebfba] bg-white px-4 text-sm font-bold"
+          class="min-h-11 rounded-xl border border-[#aebfba] bg-white px-4 text-sm font-bold"
           type="button"
           @click="setAllCategoriesExpanded(true)"
         >
           すべて開く
         </button>
         <button
-          class="min-h-10 rounded-xl border border-[#aebfba] bg-white px-4 text-sm font-bold"
+          class="min-h-11 rounded-xl border border-[#aebfba] bg-white px-4 text-sm font-bold"
           type="button"
           @click="setAllCategoriesExpanded(false)"
         >
@@ -849,7 +886,7 @@ function deleteMessageFor(error: unknown): string {
               <template v-if="checklist.editable">
                 <div class="flex items-center gap-1" role="group" :aria-label="`${item.toolName}の数量操作`">
                   <button
-                    class="min-h-10 min-w-10 rounded-lg border border-[#aebfba] bg-white font-black disabled:opacity-40"
+                    class="min-h-11 min-w-11 rounded-lg border border-[#aebfba] bg-white font-black disabled:opacity-40"
                     type="button"
                     :aria-label="`${item.toolName}を1減らす`"
                     :disabled="item.takeoutQuantity === 0"
@@ -858,7 +895,7 @@ function deleteMessageFor(error: unknown): string {
                     −
                   </button>
                   <input
-                    class="min-h-10 w-14 rounded-lg border border-[#aebfba] px-1 text-center font-bold"
+                    class="min-h-11 w-14 rounded-lg border border-[#aebfba] px-1 text-center font-bold"
                     type="number"
                     inputmode="numeric"
                     min="0"
@@ -869,7 +906,7 @@ function deleteMessageFor(error: unknown): string {
                     @change="handleQuantityChange(item, $event)"
                   />
                   <button
-                    class="min-h-10 min-w-10 rounded-lg border border-[#aebfba] bg-white font-black disabled:opacity-40"
+                    class="min-h-11 min-w-11 rounded-lg border border-[#aebfba] bg-white font-black disabled:opacity-40"
                     type="button"
                     :aria-label="`${item.toolName}を1増やす`"
                     :disabled="item.takeoutQuantity === item.stockQuantity"
@@ -879,7 +916,7 @@ function deleteMessageFor(error: unknown): string {
                   </button>
                 </div>
                 <div class="ml-auto flex min-w-[6.5rem] flex-col items-end gap-1 sm:ml-0">
-                  <label class="flex min-h-10 cursor-pointer items-center gap-2 font-bold">
+                  <label class="flex min-h-11 cursor-pointer items-center gap-2 font-bold">
                     <input
                       type="checkbox"
                       :checked="item.checked"
@@ -977,9 +1014,10 @@ function deleteMessageFor(error: unknown): string {
 
     <dialog
       ref="deleteDialog"
-      class="m-auto w-[min(92vw,32rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl backdrop:bg-black/50"
+      class="app-dialog w-[min(92vw,32rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl"
       aria-labelledby="delete-checklist-title"
       @cancel.prevent="closeDeleteDialog"
+      @keydown="trapDeleteDialogFocus"
     >
       <section class="p-6 sm:p-7">
         <p class="text-xs font-black tracking-[0.16em] text-[#9a3832]">DELETE DAILY CHECK</p>
@@ -1000,7 +1038,7 @@ function deleteMessageFor(error: unknown): string {
           {{ deleteErrorMessage }}
         </p>
       </section>
-      <footer class="flex justify-end gap-3 border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4">
+      <footer class="app-dialog-actions border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4">
         <button
           class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold"
           type="button"

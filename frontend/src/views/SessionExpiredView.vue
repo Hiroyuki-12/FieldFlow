@@ -3,7 +3,9 @@
     <section class="w-full max-w-lg rounded-3xl border border-[#cfdbd5] bg-[#fffdf8] p-7 text-center shadow-lg sm:p-10">
       <div class="mx-auto grid size-14 place-items-center rounded-2xl bg-[#fff0d7] text-2xl" aria-hidden="true">⌛</div>
       <p class="mt-6 text-xs font-black tracking-[0.16em] text-[#9a5a18]">SESSION EXPIRED</p>
-      <h1 class="mt-2 text-3xl font-black tracking-tight">セッションが切れました</h1>
+      <h1 class="mt-2 text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+        セッションが切れました
+      </h1>
       <p class="mt-4 leading-7 text-[#49666a]">
         安全のため操作を終了しました。入力中の内容は保存されていない可能性があります。
       </p>

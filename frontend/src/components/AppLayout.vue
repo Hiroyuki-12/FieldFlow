@@ -1,22 +1,47 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { RouterLink, RouterView, useRouter } from 'vue-router';
+import { computed, nextTick, ref, watch } from 'vue';
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 
 import { ApiError } from '../api/errors';
 import { useAuthStore } from '../stores/auth';
 import { todayInTokyo } from '../utils/date';
+import AppNotice from './AppNotice.vue';
 
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const today = todayInTokyo();
 const mobileMenuOpen = ref(false);
 const logoutError = ref('');
 const isLoggingOut = ref(false);
+const mobileMenuButton = ref<HTMLButtonElement | null>(null);
+const mobileNavigation = ref<HTMLElement | null>(null);
 
 const roleLabel = computed(() =>
   authStore.user?.role === 'ADMIN' ? '管理者' : '作業者',
 );
 const initials = computed(() => authStore.user?.name.slice(0, 2) ?? 'FF');
+
+watch(
+  () => route.fullPath,
+  () => {
+    mobileMenuOpen.value = false;
+  },
+);
+
+async function toggleMobileMenu(): Promise<void> {
+  mobileMenuOpen.value = !mobileMenuOpen.value;
+  if (mobileMenuOpen.value) {
+    await nextTick();
+    mobileNavigation.value?.querySelector<HTMLElement>('a, button')?.focus();
+  }
+}
+
+function closeMobileMenu(): void {
+  if (!mobileMenuOpen.value) return;
+  mobileMenuOpen.value = false;
+  void nextTick(() => mobileMenuButton.value?.focus());
+}
 
 async function handleLogout(): Promise<void> {
   if (isLoggingOut.value) return;
@@ -123,12 +148,13 @@ async function handleLogout(): Promise<void> {
         </div>
 
         <button
+          ref="mobileMenuButton"
           type="button"
           class="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#cfdbd5] bg-white text-xl md:hidden"
           :aria-expanded="mobileMenuOpen"
           aria-controls="mobile-navigation"
           :aria-label="mobileMenuOpen ? 'メニューを閉じる' : 'メニューを開く'"
-          @click="mobileMenuOpen = !mobileMenuOpen"
+          @click="toggleMobileMenu"
         >
           <span aria-hidden="true">{{ mobileMenuOpen ? '×' : '☰' }}</span>
         </button>
@@ -137,8 +163,10 @@ async function handleLogout(): Promise<void> {
       <nav
         v-if="mobileMenuOpen"
         id="mobile-navigation"
+        ref="mobileNavigation"
         class="border-t border-[#cfdbd5] px-4 py-4 md:hidden"
         aria-label="モバイルナビゲーション"
+        @keydown.esc.prevent="closeMobileMenu"
       >
         <div class="mb-3 flex items-center gap-3 rounded-xl bg-[#e8eee9] p-3">
           <span
@@ -247,13 +275,14 @@ async function handleLogout(): Promise<void> {
       </aside>
 
       <main id="main-content" class="min-w-0 flex-1 px-4 py-8 sm:px-6 md:py-10">
-        <p
+        <AppNotice
           v-if="logoutError"
-          class="mb-5 rounded-xl bg-[#fbe4e1] p-4 text-sm text-[#8d2f2b]"
-          role="alert"
+          class="mb-5"
+          tone="error"
+          title="ログアウトを確認できませんでした"
         >
           {{ logoutError }}
-        </p>
+        </AppNotice>
         <RouterView />
       </main>
     </div>

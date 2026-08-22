@@ -55,6 +55,10 @@ CI基盤の初期段階では、Health APIのHTTP経路をDB mockと組み合わ
 
 MySQL 8.4を3306で起動し、通常環境と分離した`fieldflow_e2e` DBへMigrationとE2E Seedを適用する。NestJSを8080、Playwrightの`webServer`でVueを5173に起動し、Chromium 1 workerで認証・管理・日別チェックを実行する。失敗時だけreport・trace・screenshot・video・Backend logをArtifactとして7日保持し、成功時は認証Cookieや不要な実行証跡を保存しない。
 
+### Performance workflow
+
+k6性能試験は通常PRのRequired checkへ含めず、リリース候補、性能に関わる変更、利用者の指定時に`workflow_dispatch`から実行する。使い捨てMySQL 8.4の`fieldflow_perf`へMigrationと専用Seedを適用し、buildしたNestJSを8080へ起動する。`smoke`、`checklist`、`master`、`all`を選択でき、p95・想定外エラー率のthreshold違反をWorkflow失敗として扱う。summary JSONは7日間、失敗時Backendログは7日間Artifactへ保存し、架空認証情報以外を使用しない。
+
 ## 3. CD
 
 ```mermaid

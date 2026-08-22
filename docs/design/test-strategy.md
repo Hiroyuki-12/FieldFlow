@@ -85,11 +85,17 @@
 
 | ID | シナリオ | 負荷 |
 | --- | --- | --- |
-| PERF-SMOKE | ログイン・health・日別表取得 | 1 VU / 1分 |
-| PERF-CHECK | ログイン済み日別表取得・項目更新 | 最大20 VU / 3分 |
-| PERF-MASTER | 道具一覧検索 | 最大20 VU / 3分 |
+| [PERF-SMOKE](../../perf/scenarios/smoke.ts) | ログイン・health・日別表取得 | 1 VU / 1分 |
+| [PERF-CHECK](../../perf/scenarios/checklist.ts) | ログイン済み日別表取得・項目更新 | 最大20 VU / 3分 |
+| [PERF-MASTER](../../perf/scenarios/master.ts) | 道具一覧検索 | 最大20 VU / 3分 |
 
 合格基準は`http_req_duration p(95)<500ms`、想定外エラー率`<1%`。409を競合試験として意図的に発生させる場合は、性能エラー率から分離して集計する。結果には実行環境、commit、DB件数、p95、エラー率、ボトルネック候補を残す。
+
+- `NODE_ENV=test`かつDB名が厳密に`fieldflow_perf`の場合だけ動く性能試験専用Seedを使い、通常DBとE2E DBから分離する。
+- 10作業カテゴリ、200道具、20日分の日別表を固定量で作り、最大20 VUが別々の項目を更新する。基準性能へ意図しない409競合を混ぜない。
+- k6はlocalhostだけを既定で許可し、リモート負荷は対象環境の許可を確認して明示フラグを設定した場合だけ実行する。
+- 一般APIのレート制限を性能劣化と誤認しないよう、シナリオへ実利用を想定した操作間隔を含める。429が発生した場合は想定外エラーとして検出する。
+- 詳細な準備・実行・結果確認は[perf README](../../perf/README.md)と[ロードマップ15](../plans/roadmap-15-k6-performance.md)を参照する。
 
 ## 6. 実行タイミング
 

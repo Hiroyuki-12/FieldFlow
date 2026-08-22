@@ -1,0 +1,24 @@
+{
+  "name": "fieldflow-performance-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "prepare:db": "node scripts/prepare-database.ts",
+    "start:backend": "node scripts/start-backend.ts",
+    "typecheck": "tsc --noEmit",
+    "test:smoke": "bash run.sh smoke",
+    "test:checklist": "bash run.sh checklist",
+    "test:master": "bash run.sh master",
+    "test:all": "bash run.sh all"
+  },
+  "devDependencies": {
+    "@types/k6": "2.2.0",
+    "@types/node": "24.13.3",
+    "typescript": "6.0.3"
+  }
+}

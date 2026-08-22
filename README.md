@@ -79,6 +79,12 @@ npm run build
 cd ../e2e
 npm run typecheck
 npm test
+
+cd ../perf
+npm run typecheck
+k6 inspect scenarios/smoke.ts
+k6 inspect scenarios/checklist.ts
+k6 inspect scenarios/master.ts
 ```
 
 ### Playwright E2E
@@ -116,13 +122,36 @@ npm test
 
 Chromium 1種類・worker 1本で、認証、管理、日別チェックを順に検証します。失敗時のtrace、screenshot、video、HTML reportは`e2e/results/`と`e2e/playwright-report/`へ保存され、Gitの追跡対象にはなりません。
 
+### k6性能試験
+
+性能試験は通常・E2E DBとは別の`fieldflow_perf`を使用します。k6 2.0.0を準備し、設定例をコピーして依存と専用Fixtureを用意します。
+
+```bash
+cp perf/.env.example perf/.env
+
+cd perf
+npm ci
+npm run prepare:db
+```
+
+別Terminalで`npm run start:backend`を実行した後、リポジトリ直下から各シナリオを実行します。
+
+```bash
+bash perf/run.sh smoke
+bash perf/run.sh checklist
+bash perf/run.sh master
+```
+
+Smokeは1 VU・1分、日別表と道具一覧は最大20 VU・3分で、p95 500ms未満・想定外エラー率1%未満を判定します。SeedとBackendは`NODE_ENV=test`かつ`DB_NAME=fieldflow_perf`以外では開始せず、k6も既定ではlocalhost以外へ負荷を送信しません。詳細は[性能試験README](perf/README.md)を参照してください。
+
 ## CI
 
-`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backend・Playwright E2Eの品質チェックを独立したjobで並列実行します。
+`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backend・Playwright E2Eの品質チェックを独立したjobで並列実行します。k6は長時間負荷を通常PRへ加えず、専用Workflowを手動実行します。
 
 - Frontend: lint、型チェック、単体・コンポーネントテスト、build
 - Backend: lint、型チェック、単体テスト、結合テスト、build
 - E2E: 専用MySQLへのMigration・Seed、NestJS・Vue起動、Chromium主要シナリオ
+- Performance（手動）: 専用MySQLへのMigration・Seed、k6 smoke・日別表・道具一覧
 - Node.jsは`.node-version`、依存パッケージは各`package-lock.json`に従って再現します。
 - build成果物はGitHub ActionsのArtifactとして7日間保存します。
 - E2E失敗時だけPlaywrightの証跡とBackendログをArtifactとして7日間保存します。

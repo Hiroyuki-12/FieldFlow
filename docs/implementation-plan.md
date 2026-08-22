@@ -3,11 +3,11 @@
 ## 1. 目的
 
 この文書は、操作確認用モックから本番利用を想定したFieldFlow MVPへ段階的に移行するための実装順序を定める。
-単に画面を再現するのではなく、要件、API、DB、テスト、運用、AWSの依存関係を守りながら、各段階で説明・検証できる状態を作る。
+単に画面を再現するのではなく、要件、API、DB、テスト、運用、Cloudflare公開環境、AWS課題提出環境の依存関係を守りながら、各段階で説明・検証できる状態を作る。
 
 ## 2. 現在地
 
-- MVP要件、機能、画面、API、DB、セキュリティ、テスト、AWSの設計資料は作成済み。
+- MVP要件、機能、画面、API、DB、セキュリティ、テスト、Cloudflare・AWSの設計資料は作成済み。
 - HTML、CSS、JavaScriptによる操作確認用モックは作成済み。
 - Vue、NestJS、Docker Compose MySQLによる開発基盤とhealth APIは実装済み。
 - Frontend・BackendのGitHub Actions CI基盤は実装済み。
@@ -20,7 +20,7 @@
 - 日別表の作成・取得API、時間帯・カテゴリ・道具スナップショットは実装済み。
 - ホーム、作成ダイアログ、日付・時間帯切替、日別表のスナップショット表示は実装済み。
 - 日別項目の数量・チェック更新APIと行別自動保存、楽観ロック競合復旧、作成済み時間帯へのカテゴリ追加は実装済み。
-- UI・アクセシビリティ全体仕上げ、ログ・運用・セキュリティ強化、Playwright E2E、k6性能試験は実装済み。AWSリソースは未実装。
+- UI・アクセシビリティ全体仕上げ、ログ・運用・セキュリティ強化、Playwright E2E、k6性能試験は実装済み。Cloudflare・AivenとAWSの外部リソースは未実装。
 - モックは画面構成と操作フローの基準として残し、本実装ではVueコンポーネントとAPI通信へ置き換える。
 
 ## 3. 実装方針
@@ -32,7 +32,7 @@
 - Access Token、Refresh Token、パスワード、Cookie、秘密値をログへ出力しない。
 - 各主要ステップの実装前後に理解度チェックを行い、原則60%以上を確認して次へ進む。
 
-## 4. DBコンテナの使い分け
+## 4. DB環境の使い分け
 
 | 用途 | DB | 目的 |
 | --- | --- | --- |
@@ -40,9 +40,10 @@
 | Backend結合テスト | TestcontainersのMySQL 8.4 | テストごとに隔離した実DBでMigration、制約、トランザクションを検証する |
 | E2E | Docker ComposeのMySQL 8.4内の`fieldflow_e2e`専用DB | 開発データと分離してVue、NestJS、MySQLを接続した操作を確認する |
 | 性能試験 | Docker ComposeのMySQL 8.4 | 認証済み主要APIへ想定負荷をかける |
-| 本番 | Amazon RDS for MySQL 8.4 | AWSの永続DBとして利用する |
+| Cloudflare公開 | Aiven for MySQL 8.4 | Containerの一時ディスクから独立して、コンテスト・ポートフォリオのデータを永続化する |
+| AWS課題提出 | Amazon RDS for MySQL 8.4 | 中級編課題と実務構成検証の永続DBとして利用する |
 
-開発用DBを結合テストに流用しない。これにより、テストによる開発データの破壊を防ぎ、ローカルとCIで同じ条件を再現する。
+開発用DBを結合テストに流用せず、公開DBへE2E Seedやk6を向けない。これにより、テストによる開発・公開データの破壊を防ぎ、ローカルとCIで同じ条件を再現する。
 
 ## 5. 実装ロードマップ
 
@@ -65,7 +66,8 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 | 13 | ログ・運用・セキュリティ強化 | JSONログ、requestId、例外Filter、認証イベント、マスキング、レート制限 | ログ結合、秘密値非出力、401・403・409・429・500の確認 |
 | 14 | E2E | Playwright設定、E2E Seed、認証・管理・日別チェックの主要シナリオ | E2E-AUTH、E2E-ADMIN、E2E-CHECKをChromiumで実行 |
 | 15 | 性能試験 | k6 smoke、日別チェック、道具一覧、結果記録 | 最大20 VU、p95 500ms未満、想定外エラー率1%未満 |
-| 16 | AWS・CD | Terraform、S3、CloudFront、ALB、ECS Fargate、ECR、RDS、監視、Migrationタスク、CD | `terraform fmt/validate/plan`、Migration後の段階的デプロイ確認 |
+| 16 | Cloudflare・Aiven公開 | Workers Static Assets、Worker、Containers、Aiven MySQL 8.4、TLS、Secrets、Migration、公開運用 | Container build、TLS、公開URLの認証・主要操作、スリープ後の永続化確認 |
+| 17 | AWS・CD | Terraform、S3、CloudFront、ALB、ECS Fargate、ECR、RDS、監視、Migrationタスク、CD | `terraform fmt/validate/plan`、Migration後の段階的デプロイ確認 |
 
 ## 6. 実装順序の理由
 
@@ -77,14 +79,16 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
               └─ 道具
                   └─ 日別チェック
                       └─ E2E・性能
-                          └─ AWS・CD
+                          └─ Cloudflare・Aiven公開
+                              └─ AWS・CD
 ```
 
 - 認証はusersとrefresh_sessions、および共通Guard・エラー処理に依存する。
 - 道具は作業カテゴリに属するため、カテゴリ管理を先に完成させる。
 - 日別チェックはユーザー、カテゴリ、道具のスナップショットを使用するため、主要機能の中で最も下流に置く。
 - CIを早期に導入し、以降のすべてのPRで型、規約、テスト、ビルドの退行を検出する。
-- AWSはアプリ、Migration、ヘルスチェック、ログ、試験方法が安定してから構築し、インフラ仕様の手戻りを抑える。
+- Cloudflare公開環境は完成したアプリ、Migration、ヘルスチェック、ログを低予算の長期公開へ接続し、コンテスト提出に必要な実URLを先に確保する。
+- AWS課題提出環境はCloudflare対応後に構築する。アプリと公開運用で得た知見をTerraform、ECS、RDS、CDへ反映し、インフラ仕様の手戻りを抑える。
 
 ## 7. 各Issueの共通完了条件
 
@@ -107,6 +111,7 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 - 日別表の作成、スナップショット、楽観ロック
 - テスト方針とE2E・性能試験
 - ログ・CI/CD
+- Cloudflare・Aiven構成
 - AWS構成
 
 理解度60%以上なら補足を確認しながら次へ進み、60%未満なら短い復習と再アウトプットを行う。
@@ -148,5 +153,7 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 - [REST API設計](design/api.md)
 - [テスト戦略](design/test-strategy.md)
 - [CI/CD設計](design/ci-cd.md)
-- [AWS・Terraform構成](design/aws-architecture.md)
+- [デプロイ環境の使い分け](design/deployment-strategy.md)
+- [Cloudflare・Aiven公開構成](design/cloudflare-architecture.md)
+- [AWS・Terraform課題提出構成](design/aws-architecture.md)
 - [トレーサビリティ](design/traceability.md)

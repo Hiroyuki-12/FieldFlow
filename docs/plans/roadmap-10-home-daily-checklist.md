@@ -66,7 +66,7 @@
 - 作成済み時間帯への作業カテゴリ追加
 - 日別項目単位の楽観ロック競合からの復旧
 - Playwright E2E全体基盤、k6、ログ全体仕上げ
-- AWS、Terraform、CD
+- Cloudflare・Aiven公開、AWS・Terraform・CD
 
 ## 5. 完了条件
 

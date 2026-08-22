@@ -2,6 +2,19 @@
 
 FieldFlowは、現場作業前の道具忘れと紙のチェック漏れを減らすための、チーム共有型の道具管理・日別チェックアプリです。
 
+## デプロイ環境
+
+FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーションを、目的の異なる二つの公開環境へデプロイします。
+
+| 環境 | 目的 | 構成 | 状態 |
+| --- | --- | --- | --- |
+| Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Worker + Containers + Aiven for MySQL 8.4 | ロードマップ16で実装予定 |
+| AWS課題提出環境 | AIエンジニアコース中級編の課題提出・実務構成検証 | S3 + CloudFront + ALB + ECS Fargate + RDS MySQL 8.4 + Terraform | ロードマップ17で実装予定 |
+
+Cloudflare環境は低アクセス時にBackend Containerをスリープさせ、公開URLを維持しながら継続費用を抑えます。ただし、Cloudflare ContainersにはWorkers Paidプランが必要で、2026年8月時点の基本料金は月額5 USDです。Aiven MySQLは無料枠から開始し、利用量と休止通知を確認します。AWS環境は学習・課題レビューに必要な期間構築し、終了後は費用と公開要否を確認して停止・削除します。設計理由と環境ごとの差は[デプロイ環境の使い分け](docs/design/deployment-strategy.md)を参照してください。
+
+公開URLとデモアカウントは、ロードマップ16のデプロイと安全確認が完了してから追記します。実際の秘密値や管理用認証情報はREADMEへ記載しません。
+
 ## 必要な環境
 
 - Node.js 24.18.0 LTS
@@ -24,7 +37,7 @@ cd ../frontend
 npm ci
 ```
 
-`.env`はローカル専用で、Gitの追跡対象には含めません。本番のパスワードや秘密値を`.env.example`へ記載しないでください。
+`.env`はローカル専用で、Gitの追跡対象には含めません。公開環境のパスワードや秘密値を`.env.example`へ記載しないでください。
 
 ## ローカル起動
 

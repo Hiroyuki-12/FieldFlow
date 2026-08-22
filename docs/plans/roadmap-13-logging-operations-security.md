@@ -95,9 +95,9 @@ FieldFlow Backendへ、画面で発生したエラーをrequestIdから追跡で
 ### 10.3 HTTP防御・レート制限
 
 - `ThrottlerGuard`を全APIへ適用し、一般APIを同一IPから600回/1分、Loginを20回/15分に制限した。既存のアカウント単位5回失敗後15分ロックは別の防御層として維持した。
-- ALBの監視を妨げないようhealth APIをレート制限対象外にした。MVPのECS 1タスク構成ではMemory Storageを使い、複数タスク化時は共有Storageを再検討する。
+- 公開基盤の監視を妨げないようhealth APIをレート制限対象外にした。MVPはCloudflare Container最大1インスタンスまたはECS 1タスクで運用し、複数プロセス化する場合は共有Storageを再検討する。
 - Helmet 8.3.0をlockfileへ固定し、HTTPセキュリティヘッダーを追加した。JSONとURL encodedの本文上限を100KBへ固定し、超過をrequestId付き413にした。
-- `TRUST_PROXY_HOPS`を0〜2で起動時検証し、ローカル直結は0、将来のCloudFront→ALB→ECSは2とした。
+- `TRUST_PROXY_HOPS`を0〜2で起動時検証し、ローカル直結は0、CloudFront→ALB→ECSは2とした。Cloudflare Worker→Containerはデプロイ時の実測Hop数を設定する。
 
 ### 10.4 自動確認結果
 

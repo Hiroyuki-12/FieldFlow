@@ -184,6 +184,8 @@ erDiagram
 
 1. Entity変更と同じPRでMigrationを作成する。
 2. ローカルMySQL 8.4とTestcontainersで上りMigrationを検証する。
-3. 本番デプロイでは新コンテナの一回限りECSタスクで`migration:run`を実行する。
-4. Migration成功後だけECS Serviceを更新する。
+3. 公開環境では、アプリ起動時に自動実行せず、デプロイ承認後の一回限りの処理として`migration:run`を実行する。
+   - Cloudflare公開環境: Aiven MySQLへ接続する一回限りの実行環境からMigrationを適用し、成功後だけWorker・Containerを更新する。
+   - AWS課題環境: 新しいバックエンドイメージの一回限りECS TaskからRDSへMigrationを適用し、成功後だけECS Serviceを更新する。
+4. Migration失敗時はアプリを更新せず、ログとDBのMigration履歴を確認する。アプリ起動のたびに再実行して原因を見えにくくしない。
 5. 原則として後方互換な追加→アプリ移行→不要列削除を別リリースに分け、破壊的な自動rollbackへ依存しない。

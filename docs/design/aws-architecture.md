@@ -1,8 +1,10 @@
-# AWS・Terraform構成
+# AWS・Terraform課題提出構成
 
 ## 1. 方針
 
-RaiseTimeLineと同じ、EC2を管理しない低コストの学習用構成を採用する。フロントとAPIを1つのCloudFront URLへ集約し、ローカル・CI・本番で同じコンテナとMySQLメジャーバージョンを使う。
+AIエンジニアコース中級編の課題提出と実務構成検証を目的に、RaiseTimeLineと同じ、EC2を管理しない学習用構成を採用する。フロントとAPIを1つのCloudFront URLへ集約し、ローカル・CI・AWS課題提出環境で同じコンテナとMySQLメジャーバージョンを使う。
+
+コンテスト・転職用ポートフォリオの長期公開は[Cloudflare・Aiven公開構成](cloudflare-architecture.md)が担当する。ALB、ECS Fargate、RDSは低アクセスでも固定的な稼働費用が発生するため、AWS環境は課題レビューと検証に必要な期間を確認して構築し、終了後はユーザー承認のもと停止・削除する。Terraformコード、plan、構成図、ログ、テスト結果を残し、必要時に再構築できる状態を成果とする。
 
 ## 2. 全体構成
 
@@ -63,7 +65,7 @@ CloudFront→ALBがHTTPである点は独自ドメインなしの学習用制約
 
 ## 6. RDS・バックアップ
 
-- `db.t3.micro`相当の学習用クラス、Single-AZ、削除保護なしを初期値とする。
+- `db.t3.micro`相当の学習用クラス、Single-AZ、削除保護なしを初期値とする。利用可能クラスとMySQL 8.4対応は実装時に再確認する。
 - 自動バックアップを7日保持し、ストレージ暗号化と自動マイナーバージョン更新を有効にする。
 - `terraform destroy`前は必要に応じて手動スナップショットを作る。学習環境の既定は最終スナップショットなしだが、実運用では逆にする。
 - Migrationは新イメージを使う一回限りECSタスクで先に実行し、成功後にServiceを更新する。
@@ -85,14 +87,17 @@ infra/
 - `*.tfvars`、state、planファイル、秘密値をGit管理しない。
 - 共通タグに`Project=fieldflow`、`Environment=prod`、`ManagedBy=terraform`を付与する。
 - `terraform fmt -check`、`validate`、`plan`をPRで確認し、`apply`・`destroy`はユーザー承認後だけ実行する。
+- AWS Budgetsと通知先を構築時に設定し、課題レビュー期間中も費用を確認する。
 
 ## 8. 復旧・拡張
 
 - ECS障害はServiceがタスクを再作成する。RDS障害はバックアップから手動復旧する。
 - 規模拡大時はECS desired count 2以上、Auto Scaling、RDS Multi-AZ、NAT/VPC Endpoint、WAFを段階的に追加する。
 - RTO/RPOの保証が必要になった時点で、Single-AZと手動復旧方針を再設計する。
+- 課題レビュー終了後に削除する場合は、必要なログ、Terraform plan、E2E・k6結果、画面記録を先に保存する。審査中のURLを独断で停止しない。
 
 ## 9. 参照資料
 
 - [Amazon RDS for MySQL versions](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/MySQL.Concepts.VersionMgmt.html)
+- [デプロイ環境の使い分け](deployment-strategy.md)
 - RaiseTimeLineの`docs/aws-architecture.md`と`infra/`（FieldFlow外のローカル参照元）

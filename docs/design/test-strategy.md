@@ -66,17 +66,18 @@
 
 | ID | シナリオ |
 | --- | --- |
-| E2E-AUTH-01 | 仮パスワードログイン→変更要求→再ログイン |
-| E2E-AUTH-02 | 通常ログイン→Refresh→ログアウト→保護画面拒否 |
-| E2E-ADMIN-01 | 管理者がカテゴリ・道具・作業者を作成 |
-| E2E-ADMIN-02 | 作業者に管理メニューがなく、直URL・APIも拒否 |
-| E2E-CHECK-01 | 作業者がホームから午前・午後へ別カテゴリを設定し、数量とチェックを自動保存 |
-| E2E-CHECK-02 | 作業者が作成済み時間帯へ未選択の作業カテゴリを追加 |
-| E2E-CHECK-03 | 過去日閲覧と編集不可状態 |
-| E2E-CHECK-04 | 今日の表を修正し、入力影響の確認後に保存 |
-| E2E-CHECK-05 | 今日の表を削除し、同じ日に再作成 |
+| [E2E-AUTH-01](../../e2e/tests/auth.spec.ts) | 仮パスワードログイン→変更要求→再ログイン |
+| [E2E-AUTH-02](../../e2e/tests/auth.spec.ts) | 通常ログイン→Refresh→ログアウト→保護画面拒否 |
+| [E2E-ADMIN-01](../../e2e/tests/admin.spec.ts) | 管理者がカテゴリ・道具・作業者を作成 |
+| [E2E-ADMIN-02](../../e2e/tests/admin.spec.ts) | 作業者に管理メニューがなく、直URL・APIも拒否 |
+| [E2E-CHECK-01](../../e2e/tests/daily-checklist.spec.ts) | 作業者が午前・午後へ別カテゴリを設定し、数量とチェックを自動保存 |
+| [E2E-CHECK-02](../../e2e/tests/daily-checklist.spec.ts) | 作業者が作成済み時間帯へ未選択の作業カテゴリを追加 |
+| [E2E-CHECK-03](../../e2e/tests/daily-checklist.spec.ts) | 過去日閲覧と編集不可状態 |
+| [E2E-CHECK-04](../../e2e/tests/daily-checklist.spec.ts) | 今日の表を修正し、入力影響の確認後に保存 |
+| [E2E-CHECK-05](../../e2e/tests/daily-checklist.spec.ts) | 今日の表を削除し、同じ日に再作成 |
 
-- E2E専用seedを使い、各specは識別可能なデータを作る。
+- `NODE_ENV=test`かつDB名が厳密に`fieldflow_e2e`の場合だけ動くE2E専用Seedを使う。前回分は`E2E `／`e2e.`接頭辞で識別し、TRUNCATEせず外部キーの子から削除する。
+- 共有する業務日・Seedを並列更新しないようChromium 1 project・worker 1本・retryなしで実行する。
 - 本番や本番DBへ向けない。trace、screenshot、video、HTML reportは失敗時に保存しGit追跡しない。
 - 規定ポートはfrontend 5173、backend 8080、MySQL 3306とする。
 

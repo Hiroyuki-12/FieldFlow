@@ -109,3 +109,120 @@ jobs:
           path: backend/dist
           if-no-files-found: error
           retention-days: 7
+
+  e2e:
+    name: Playwright E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 破棄されるCI内MySQLだけで使う架空の認証情報。本番・開発環境の秘密値は使わない。
+      NODE_ENV: test
+      LOG_LEVEL: warn
+      PORT: 8080
+      CORS_ORIGIN: http://localhost:5173
+      TRUST_PROXY_HOPS: 0
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: fieldflow_e2e
+      DB_USER: fieldflow
+      DB_PASSWORD: fieldflow_e2e_ci
+      JWT_ACCESS_SECRET: e2e-ci-only-jwt-secret-at-least-32-bytes
+      JWT_ACCESS_TTL_SECONDS: 900
+      REFRESH_TOKEN_TTL_SECONDS: 604800
+      COOKIE_SECURE: false
+      E2E_BASE_URL: http://localhost:5173
+      E2E_API_URL: http://localhost:8080/api/v1
+      E2E_ADMIN_PASSWORD: E2e-Admin-Password-2026
+      E2E_WORKER_PASSWORD: E2e-Worker-Password-2026
+      E2E_FIRST_LOGIN_PASSWORD: E2e-First-Password-2026
+      E2E_FIRST_CHANGED_PASSWORD: E2e-Changed-Password-2026
+
+    services:
+      mysql:
+        image: mysql:8.4.10
+        env:
+          MYSQL_ROOT_PASSWORD: fieldflow_e2e_root
+          MYSQL_DATABASE: fieldflow_e2e
+          MYSQL_USER: fieldflow
+          MYSQL_PASSWORD: fieldflow_e2e_ci
+          TZ: UTC
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=fieldflow_e2e_root --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: ソースコードを取得する
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Node.jsとnpmキャッシュを準備する
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      - name: Backend依存パッケージをインストールする
+        working-directory: backend
+        run: npm ci
+
+      - name: Frontend依存パッケージをインストールする
+        working-directory: frontend
+        run: npm ci
+
+      - name: E2E依存パッケージをインストールする
+        working-directory: e2e
+        run: npm ci
+
+      - name: Chromiumと実行ライブラリをインストールする
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: E2Eコードを型チェックする
+        working-directory: e2e
+        run: npm run typecheck
+
+      - name: E2E専用DBへMigrationとSeedを適用する
+        working-directory: backend
+        run: |
+          npm run migration:run
+          npm run seed:e2e
+
+      - name: Backendをbuildして起動する
+        working-directory: backend
+        run: |
+          npm run build
+          npm run start > ../e2e/backend-e2e.log 2>&1 &
+
+      - name: Backendの起動完了を待つ
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8080/api/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend did not become ready" >&2
+          exit 1
+
+      - name: Chromiumで主要E2Eを実行する
+        working-directory: e2e
+        run: npm test
+
+      - name: 失敗時のPlaywright証跡を保存する
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-failure-${{ github.sha }}
+          path: |
+            e2e/results
+            e2e/playwright-report
+            e2e/backend-e2e.log
+          if-no-files-found: warn
+          retention-days: 7

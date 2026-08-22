@@ -53,7 +53,7 @@ CI基盤の初期段階では、Health APIのHTTP経路をDB mockと組み合わ
 
 ### E2E job
 
-MySQL 8.4を3306で起動し、MigrationとE2E seedを適用する。NestJSを8080、Playwrightの`webServer`でVueを5173に起動してChromiumシナリオを実行する。失敗時もreport・trace・backend logを7日保持する。
+MySQL 8.4を3306で起動し、通常環境と分離した`fieldflow_e2e` DBへMigrationとE2E Seedを適用する。NestJSを8080、Playwrightの`webServer`でVueを5173に起動し、Chromium 1 workerで認証・管理・日別チェックを実行する。失敗時だけreport・trace・screenshot・video・Backend logをArtifactとして7日保持し、成功時は認証Cookieや不要な実行証跡を保存しない。
 
 ## 3. CD
 

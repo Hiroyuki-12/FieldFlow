@@ -1,0 +1,22 @@
+{
+  "name": "fieldflow-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "packageManager": "npm@11.16.0",
+  "scripts": {
+    "prepare:db": "node scripts/prepare-database.ts",
+    "start:backend": "node scripts/start-backend.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "@types/node": "24.13.3",
+    "typescript": "6.0.3"
+  }
+}

@@ -75,16 +75,57 @@ npm run lint
 npm test
 npm run test:integration
 npm run build
+
+cd ../e2e
+npm run typecheck
+npm test
 ```
+
+### Playwright E2E
+
+E2Eは通常の開発DBではなく、同じMySQL `3306`内の`fieldflow_e2e`専用DBを使用します。初回は設定例をコピーして依存を準備します。
+
+```bash
+cp e2e/.env.example e2e/.env
+
+cd e2e
+npm ci
+npx playwright install chromium
+```
+
+MySQLを起動した状態で、Migrationと識別可能なE2E Seedを適用します。`prepare:db`は`NODE_ENV=test`かつ`DB_NAME=fieldflow_e2e`以外では接続前に失敗します。
+
+```bash
+docker compose up -d db
+
+cd e2e
+npm run prepare:db
+```
+
+別TerminalでE2E用Backendを起動し、さらに別TerminalからPlaywrightを実行します。FrontendはPlaywrightの`webServer`が`5173`で起動します。
+
+```bash
+cd e2e
+npm run start:backend
+```
+
+```bash
+cd e2e
+npm test
+```
+
+Chromium 1種類・worker 1本で、認証、管理、日別チェックを順に検証します。失敗時のtrace、screenshot、video、HTML reportは`e2e/results/`と`e2e/playwright-report/`へ保存され、Gitの追跡対象にはなりません。
 
 ## CI
 
-`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backendの品質チェックを独立したjobで並列実行します。
+`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backend・Playwright E2Eの品質チェックを独立したjobで並列実行します。
 
 - Frontend: lint、型チェック、単体・コンポーネントテスト、build
 - Backend: lint、型チェック、単体テスト、結合テスト、build
+- E2E: 専用MySQLへのMigration・Seed、NestJS・Vue起動、Chromium主要シナリオ
 - Node.jsは`.node-version`、依存パッケージは各`package-lock.json`に従って再現します。
 - build成果物はGitHub ActionsのArtifactとして7日間保存します。
+- E2E失敗時だけPlaywrightの証跡とBackendログをArtifactとして7日間保存します。
 
 CIでのみ問題が起きることを避けるため、push前にも上記の品質チェックをローカルで実行します。GitHub Actionsに秘密値を追加する場合は後続Issueで用途と権限を確認し、トークンやパスワードをログやArtifactへ含めません。
 

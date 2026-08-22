@@ -14,6 +14,8 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
     "seed:run": "ts-node src/database/seeds/seed.cli.ts",
+    "seed:e2e": "ts-node src/database/seeds/e2e-seed.cli.ts",
+    "e2e:db:create": "ts-node src/database/seeds/e2e-database.cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "format": "prettier --write \"{src,test}/**/*.ts\"",

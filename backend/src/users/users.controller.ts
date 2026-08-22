@@ -15,6 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AuditLogService } from '../common/logging/audit-log.service';
 import { UserRole } from '../database/entities';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
@@ -33,7 +34,10 @@ import { UsersService } from './users.service';
 @Roles(UserRole.ADMIN)
 @Controller('v1/users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'ユーザーを検索・一覧取得する' })
@@ -43,10 +47,19 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: 'ユーザーを作成して仮パスワードを発行する' })
-  create(
+  async create(
+    @CurrentUser() currentUser: AuthenticatedUser,
     @Body() dto: CreateUserDto,
   ): Promise<UserWithTemporaryPasswordResponse> {
-    return this.usersService.create(dto);
+    const created = await this.usersService.create(dto);
+    // 仮パスワードやDTOは渡さず、誰がどのUserを作成したかだけを監査ログへ残す。
+    this.auditLogService.management(
+      currentUser.id,
+      'user_created',
+      'user',
+      created.id,
+    );
+    return created;
   }
 
   @Get(':id')
@@ -57,30 +70,52 @@ export class UsersController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'ユーザーの名前・ログインID・Roleを更新する' })
-  update(
+  async update(
     @CurrentUser() currentUser: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserDto,
   ): Promise<UserResponse> {
-    return this.usersService.update(currentUser, id, dto);
+    const updated = await this.usersService.update(currentUser, id, dto);
+    this.auditLogService.management(
+      currentUser.id,
+      'user_updated',
+      'user',
+      updated.id,
+    );
+    return updated;
   }
 
   @Patch(':id/status')
   @ApiOperation({ summary: 'ユーザーを利用停止または再有効化する' })
-  updateStatus(
+  async updateStatus(
     @CurrentUser() currentUser: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateUserStatusDto,
   ): Promise<UserResponse> {
-    return this.usersService.updateStatus(currentUser, id, dto);
+    const updated = await this.usersService.updateStatus(currentUser, id, dto);
+    this.auditLogService.management(
+      currentUser.id,
+      'user_status_updated',
+      'user',
+      updated.id,
+    );
+    return updated;
   }
 
   @Post(':id/temporary-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '仮パスワードを再発行する' })
-  reissueTemporaryPassword(
+  async reissueTemporaryPassword(
+    @CurrentUser() currentUser: AuthenticatedUser,
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<UserWithTemporaryPasswordResponse> {
-    return this.usersService.reissueTemporaryPassword(id);
+    const updated = await this.usersService.reissueTemporaryPassword(id);
+    this.auditLogService.management(
+      currentUser.id,
+      'user_temporary_password_reissued',
+      'user',
+      updated.id,
+    );
+    return updated;
   }
 }

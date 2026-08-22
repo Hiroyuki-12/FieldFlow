@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from './auth/auth.module';
 import { CategoriesModule } from './categories/categories.module';
+import { LoggingModule } from './common/logging/logging.module';
 import { environmentValidationSchema } from './config/environment.schema';
 import { createTypeOrmOptions } from './database/typeorm.config';
 import { DailyChecklistsModule } from './daily-checklists/daily-checklists.module';
@@ -31,6 +32,8 @@ import { UsersModule } from './users/users.module';
       inject: [ConfigService],
       useFactory: createTypeOrmOptions,
     }),
+    // HTTP機能より先に横断ログ基盤を登録し、以降の全Moduleへ同じ形式を適用する。
+    LoggingModule,
     // 機能ごとに閉じたModuleを読み込み、ルートModuleから利用できるようにする。
     AuthModule,
     CategoriesModule,

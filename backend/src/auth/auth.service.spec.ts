@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 
+import { AuditLogService } from '../common/logging/audit-log.service';
 import { UserRole } from '../database/entities';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
@@ -9,6 +10,7 @@ describe('AuthService', () => {
   const service = new AuthService(
     { transaction } as unknown as DataSource,
     {} as TokenService,
+    { authentication: jest.fn() } as unknown as AuditLogService,
   );
 
   beforeEach(() => {

@@ -62,6 +62,7 @@ describe('Users API (integration)', () => {
 
     Object.assign(process.env, {
       NODE_ENV: 'test',
+      LOG_LEVEL: 'fatal',
       PORT: '8080',
       CORS_ORIGIN: origin,
       DB_HOST: container.getHost(),

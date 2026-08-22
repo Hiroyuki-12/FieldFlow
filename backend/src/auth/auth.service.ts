@@ -12,11 +12,8 @@ import {
   verifyDummyPassword,
   verifyPassword,
 } from '../common/security/password-hashing';
-import {
-  RecordStatus,
-  RefreshSession,
-  User,
-} from '../database/entities';
+import { AuditLogService } from '../common/logging/audit-log.service';
+import { RecordStatus, RefreshSession, User } from '../database/entities';
 import {
   ACCOUNT_LOCK_DURATION_MS,
   MAX_FAILED_LOGIN_ATTEMPTS,
@@ -44,7 +41,8 @@ type LoginTransactionResult =
   | { status: 'succeeded'; user: User; refreshToken: string };
 
 type RefreshTransactionResult =
-  | { status: 'invalid' | 'reused' }
+  | { status: 'invalid'; userId?: string }
+  | { status: 'reused'; userId: string }
   | { status: 'succeeded'; user: User; refreshToken: string };
 
 /**
@@ -57,6 +55,7 @@ export class AuthService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly tokenService: TokenService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   /**
@@ -146,8 +145,16 @@ export class AuthService {
 
     // 失敗理由を外へ分けて返さず、ユーザーの存在・停止・ロック状態を推測させない。
     if (result.status === 'failed') {
+      // loginIdや失敗理由をログへ分けて出さず、外部からユーザー状態を推測できないようにする。
+      this.auditLogService.authentication('authentication_login', 'failed', {
+        ipAddress: client.ipAddress,
+      });
       throw this.invalidCredentialsException();
     }
+    this.auditLogService.authentication('authentication_login', 'succeeded', {
+      userId: result.user.id,
+      ipAddress: client.ipAddress,
+    });
     return this.createTokenResponse(result.user, result.refreshToken);
   }
 
@@ -186,9 +193,9 @@ export class AuthService {
           if (session.replacedBySessionId) {
             // ローテーション後のToken再利用は盗難の兆候として、全端末の有効Sessionを失効する。
             await this.revokeAllActiveSessions(manager, session.userId, now);
-            return { status: 'reused' };
+            return { status: 'reused', userId: session.userId };
           }
-          return { status: 'invalid' };
+          return { status: 'invalid', userId: session.userId };
         }
 
         // 期限切れまたは利用停止ユーザーのSessionは、その場で失効時刻も記録する。
@@ -198,7 +205,7 @@ export class AuthService {
         ) {
           session.revokedAt = now;
           await manager.getRepository(RefreshSession).save(session);
-          return { status: 'invalid' };
+          return { status: 'invalid', userId: session.userId };
         }
 
         // 新TokenのSessionを先に作り、そのIDを旧Sessionへ記録して履歴を鎖状につなぐ。
@@ -230,8 +237,20 @@ export class AuthService {
     );
 
     if (result.status !== 'succeeded') {
+      this.auditLogService.authentication(
+        'authentication_refresh',
+        result.status,
+        {
+          ...(result.userId ? { userId: result.userId } : {}),
+          ipAddress: client.ipAddress,
+        },
+      );
       throw new UnauthorizedException('認証が必要です。');
     }
+    this.auditLogService.authentication('authentication_refresh', 'succeeded', {
+      userId: result.user.id,
+      ipAddress: client.ipAddress,
+    });
     return this.createTokenResponse(result.user, result.refreshToken);
   }
 
@@ -239,11 +258,12 @@ export class AuthService {
   async logout(rawRefreshToken: string | undefined): Promise<void> {
     // Cookieがすでに消えている場合も成功扱いにし、Logoutを安全に再実行できるようにする。
     if (!rawRefreshToken) {
+      this.auditLogService.authentication('authentication_logout', 'skipped');
       return;
     }
 
     const tokenHash = this.tokenService.hashRefreshToken(rawRefreshToken);
-    await this.dataSource.transaction(async (manager) => {
+    const userId = await this.dataSource.transaction(async (manager) => {
       const session = await manager
         .getRepository(RefreshSession)
         .createQueryBuilder('session')
@@ -256,7 +276,13 @@ export class AuthService {
         session.revokedAt = new Date();
         await manager.getRepository(RefreshSession).save(session);
       }
+      return session?.userId;
     });
+    this.auditLogService.authentication(
+      'authentication_logout',
+      userId ? 'succeeded' : 'skipped',
+      userId ? { userId } : {},
+    );
   }
 
   /** Guardが確認済みのUserから、画面へ公開してよい項目だけを返す。 */
@@ -303,13 +329,28 @@ export class AuthService {
     });
 
     if (outcome === 'unauthorized') {
+      this.auditLogService.authentication(
+        'authentication_password_change',
+        'failed',
+        { userId: currentUser.id },
+      );
       throw new UnauthorizedException('認証が必要です。');
     }
     if (outcome === 'wrong-password') {
+      this.auditLogService.authentication(
+        'authentication_password_change',
+        'failed',
+        { userId: currentUser.id },
+      );
       throw new UnprocessableEntityException(
         '現在のパスワードが正しくありません。',
       );
     }
+    this.auditLogService.authentication(
+      'authentication_password_change',
+      'succeeded',
+      { userId: currentUser.id },
+    );
   }
 
   private async createTokenResponse(
@@ -327,9 +368,7 @@ export class AuthService {
     };
   }
 
-  private toPublicUser(
-    user: User | AuthenticatedUser,
-  ): PublicUserResponse {
+  private toPublicUser(user: User | AuthenticatedUser): PublicUserResponse {
     // Entityをそのまま返さず、passwordHashなどが将来誤ってJSON化されることを防ぐ。
     return {
       id: user.id,

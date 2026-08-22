@@ -17,7 +17,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 
 import {
@@ -63,7 +63,6 @@ export class AuthController {
    * `@Public`でJWT認証を不要にし、IP単位の試行回数制限だけを先に適用する。
    */
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({
     default: {
       limit: LOGIN_IP_RATE_LIMIT,
@@ -124,9 +123,7 @@ export class AuthController {
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
-    await this.authService.logout(
-      request.cookies[REFRESH_TOKEN_COOKIE_NAME],
-    );
+    await this.authService.logout(request.cookies[REFRESH_TOKEN_COOKIE_NAME]);
     this.authCookieService.clearRefreshToken(response);
   }
 
@@ -159,9 +156,7 @@ export class AuthController {
     this.authCookieService.clearRefreshToken(response);
   }
 
-  private getClientMetadata(
-    request: AuthenticatedRequest,
-  ): AuthClientMetadata {
+  private getClientMetadata(request: AuthenticatedRequest): AuthClientMetadata {
     // DB列の最大長で切り、巨大なHeaderで保存処理を失敗させられないようにする。
     return {
       ipAddress: request.ip?.slice(0, 45) ?? null,

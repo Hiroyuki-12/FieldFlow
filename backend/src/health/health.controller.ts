@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 
 import { Public } from '../auth/decorators/public.decorator';
 import { HealthService } from './health.service';
@@ -11,6 +12,7 @@ export interface HealthResponse {
 /** APIとDBの最小限の生存確認を公開する。 */
 @ApiTags('health')
 @Public()
+@SkipThrottle()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}

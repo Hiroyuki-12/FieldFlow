@@ -6,12 +6,13 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { RefreshSession, User } from '../database/entities';
+import { LoggingModule } from '../common/logging/logging.module';
+import {
+  GENERAL_API_RATE_LIMIT,
+  GENERAL_API_RATE_TTL_MS,
+} from '../common/security/rate-limit.constants';
 import { AuthCookieService } from './auth-cookie.service';
 import { AuthController } from './auth.controller';
-import {
-  LOGIN_IP_RATE_LIMIT,
-  LOGIN_IP_RATE_TTL_MS,
-} from './auth.constants';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { MustChangePasswordGuard } from './guards/must-change-password.guard';
@@ -27,6 +28,7 @@ import { TokenService } from './token.service';
   imports: [
     // AuthServiceからUser／RefreshSessionのRepositoryをDIできるようにする。
     TypeOrmModule.forFeature([User, RefreshSession]),
+    LoggingModule,
     // 環境変数の秘密鍵と有効期間を使ってJwtServiceを生成する。鍵はコードへ直書きしない。
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -34,16 +36,15 @@ import { TokenService } from './token.service';
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn:
-            configService.getOrThrow<number>('JWT_ACCESS_TTL_SECONDS'),
+          expiresIn: configService.getOrThrow<number>('JWT_ACCESS_TTL_SECONDS'),
         },
       }),
     }),
-    // Login APIで使うIP単位の試行回数を、プロセス内メモリで数える。
+    // 一般APIのIP単位制限をプロセス内メモリで数え、LoginはControllerでより厳しく上書きする。
     ThrottlerModule.forRoot([
       {
-        ttl: LOGIN_IP_RATE_TTL_MS,
-        limit: LOGIN_IP_RATE_LIMIT,
+        ttl: GENERAL_API_RATE_TTL_MS,
+        limit: GENERAL_API_RATE_LIMIT,
       },
     ]),
   ],
@@ -54,9 +55,9 @@ import { TokenService } from './token.service';
     AuthCookieService,
     TokenService,
     OriginGuard,
-    ThrottlerGuard,
     // APP_GUARDは全Controllerへ自動適用される。登録順が判定順なので順序を維持する。
-    // 1. 本人確認 → 2. 初回パスワード変更確認 → 3. Role確認、の順に判定する。
+    // 1. IP制限 → 2. 本人確認 → 3. 初回パスワード変更確認 → 4. Role確認、の順に判定する。
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: MustChangePasswordGuard },
     { provide: APP_GUARD, useClass: RolesGuard },

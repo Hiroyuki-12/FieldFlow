@@ -86,7 +86,7 @@ sequenceDiagram
 ## 5. 環境変数
 
 - Frontend: `VITE_API_BASE_URL`。本番は同一オリジンの`/api/v1`、ローカルはVite proxyを推奨する。
-- Backend: `NODE_ENV`、`PORT=8080`、DB接続、JWT署名鍵、Token期限、Cookie Secure、許可Origin、ログレベル。
+- Backend: `NODE_ENV`、`PORT=8080`、DB接続、JWT署名鍵、Token期限、Cookie Secure、許可Origin、`LOG_LEVEL`、`TRUST_PROXY_HOPS`。
 - 起動時に型・必須値・範囲を検証し、不正なら安全に起動失敗させる。
 
 ## 6. 参照資料

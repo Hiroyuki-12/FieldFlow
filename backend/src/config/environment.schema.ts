@@ -6,6 +6,9 @@ import Joi from 'joi';
  */
 export const environmentValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').required(),
+  LOG_LEVEL: Joi.string()
+    .valid('debug', 'info', 'warn', 'error', 'fatal')
+    .default('info'),
   PORT: Joi.number().integer().valid(8080).required(),
   CORS_ORIGIN: Joi.string()
     .uri({ scheme: ['http', 'https'] })
@@ -34,4 +37,6 @@ export const environmentValidationSchema = Joi.object({
       then: Joi.valid(true).required(),
       otherwise: Joi.required(),
     }),
+  // ローカル直結は0。CloudFront→ALB→ECSでは2を指定し、req.ipの信頼範囲を固定する。
+  TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(2).default(0),
 });

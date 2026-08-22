@@ -58,6 +58,8 @@ npm run dev
 
 Frontendは`/api`へのリクエストをVite proxyでBackendへ転送します。ブラウザから直接異なるoriginへ通信しないため、ローカルでも本番に近い経路で確認できます。
 
+Backendログは1イベント1行のJSONです。ローカルでは`backend/.env`の`LOG_LEVEL=debug`を使用でき、画面のエラー本文または`X-Request-Id`ヘッダーにあるrequestIdで、同じHTTP処理・例外・認証イベントを追跡できます。`TRUST_PROXY_HOPS`はローカルでは`0`のまま使用し、実際のProxy構成と一致しない値へ変更しないでください。
+
 ## 品質チェック
 
 ```bash

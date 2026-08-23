@@ -19,14 +19,27 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
   // 現場利用者の入口であるホームから、今日の表作成フローへ進む。
   await page.getByRole("button", { name: /今日のチェックを作成/ }).click();
   let dialog = page.getByRole("dialog", { name: /チェック表を作成/ });
+  const createButton = dialog.getByRole("button", {
+    name: "チェック表を作成",
+  });
+  await expect(createButton).toBeDisabled();
   await dialog.getByLabel("午前・午後").check();
   await dialog.getByLabel("E2E 電気工事").check();
+  await expect(createButton).toBeDisabled();
+  await expect(
+    dialog.getByText("午後の作業カテゴリを1つ以上選択してください。"),
+  ).toBeVisible();
   await dialog.getByRole("button", { name: /午後/ }).click();
   await dialog.getByLabel("E2E 配管工事").check();
-  await dialog.getByRole("button", { name: "チェック表を作成" }).click();
+  await expect(createButton).toBeEnabled();
+  await createButton.click();
   // Homeは保存後に日別画面へ遷移するため、遷移先と作成内容を成功条件にする。
   await expect(page).toHaveURL(/\/daily-checklists\/\d{4}-\d{2}-\d{2}$/);
-  await expect(page.getByRole("heading", { name: "日別チェック" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "日別チェック" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "確認が必要" })).toBeVisible();
+  await expect(page.getByText("数量未設定 2カテゴリ")).toBeVisible();
 
   const testerQuantity = page.getByRole("spinbutton", {
     name: "E2E テスターの持ち出し数",
@@ -38,6 +51,22 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
     .getByRole("checkbox", { name: "E2E テスターを準備済みにする" })
     .check();
   await waitForSaved(testerQuantity);
+  await expect(page.getByRole("heading", { name: "確認が必要" })).toBeVisible();
+  await expect(page.getByText("数量未設定 1カテゴリ")).toBeVisible();
+
+  // 自動追加される共通道具も確認対象に含め、未設定のまま完了扱いにしない。
+  const helmetQuantity = page.getByRole("spinbutton", {
+    name: "E2E ヘルメットの持ち出し数",
+  });
+  await helmetQuantity.fill("1");
+  await helmetQuantity.press("Tab");
+  await waitForSaved(helmetQuantity);
+  await page
+    .getByRole("checkbox", { name: "E2E ヘルメットを準備済みにする" })
+    .check();
+  await waitForSaved(helmetQuantity);
+  await expect(page.getByRole("heading", { name: "準備完了" })).toBeVisible();
+  await expect(page.getByText("数量未設定 0カテゴリ")).toBeVisible();
 
   await page.getByRole("button", { name: "午後" }).click();
   const wrenchQuantity = page.getByRole("spinbutton", {
@@ -74,7 +103,13 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
     .click();
   dialog = page.getByRole("dialog", { name: /時間帯・作業内容を変更/ });
   await dialog.getByLabel("1日通し").check();
+  await expect(
+    dialog.getByRole("button", { name: "変更を保存" }),
+  ).toBeDisabled();
   await dialog.getByLabel("E2E 電気工事").check();
+  await expect(
+    dialog.getByRole("button", { name: "変更を保存" }),
+  ).toBeEnabled();
   await dialog.getByRole("button", { name: "変更を保存" }).click();
   await expect(dialog.getByText("入力済みの内容があります")).toBeVisible();
   await dialog.getByRole("button", { name: "変更を確定する" }).click();

@@ -1,5 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { fireEvent, render, screen, waitFor } from '@testing-library/vue';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/vue';
 import { http, HttpResponse } from 'msw';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -141,13 +146,17 @@ describe('DailyChecklistView', () => {
     expect(await screen.findByText('ほうき')).toBeInTheDocument();
     expect(screen.getByText('手袋')).toBeInTheDocument();
     expect(screen.queryByText('スポンジ')).not.toBeInTheDocument();
-    expect(screen.getByText('準備 1 / 1')).toBeInTheDocument();
+    expect(
+      screen.getByRole('region', { name: '確認が必要' }),
+    ).toHaveTextContent(/持ち出し対象の準備\s+1 \/ 1/);
 
     await fireEvent.click(screen.getByRole('button', { name: '午後' }));
 
     expect(screen.getByText('スポンジ')).toBeInTheDocument();
     expect(screen.queryByText('ほうき')).not.toBeInTheDocument();
-    expect(screen.getByText('準備 0 / 1')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '準備中' })).toHaveTextContent(
+      /持ち出し対象の準備\s+0 \/ 1/,
+    );
   });
 
   it('カテゴリ別進捗を表示し、時間帯ごとの開閉状態を維持する', async () => {
@@ -185,6 +194,104 @@ describe('DailyChecklistView', () => {
       'aria-expanded',
       'true',
     );
+  });
+
+  it('持ち出し対象が全て準備済みでも、数量未設定カテゴリがあれば確認必要と表示する', async () => {
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(splitChecklist('2026-08-18')),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    const summary = await screen.findByRole('region', { name: '確認が必要' });
+    expect(summary).toHaveTextContent(/持ち出し対象の準備\s+1 \/ 1/);
+    expect(summary).toHaveTextContent(/数量未設定\s+1カテゴリ/);
+    expect(summary).not.toHaveTextContent('準備完了');
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuetext',
+      '持ち出し対象の準備 1 / 1、数量未設定 1カテゴリ、確認が必要',
+    );
+  });
+
+  it('数量未設定カテゴリ数を、作業カテゴリと道具のある共通カテゴリから集計する', async () => {
+    const checklist = splitChecklist('2026-08-18');
+    checklist.periods[0].categories.push({
+      sourceCategoryId: 'category-2',
+      categoryName: '設営',
+    });
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(checklist),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    const summary = await screen.findByRole('region', { name: '確認が必要' });
+    expect(summary).toHaveTextContent(/数量未設定\s+2カテゴリ/);
+    expect(screen.getByRole('button', { name: /設営/ })).toHaveTextContent(
+      '持ち出し未設定',
+    );
+    expect(screen.getByRole('button', { name: /共通/ })).toHaveTextContent(
+      '持ち出し未設定',
+    );
+  });
+
+  it('数量未設定がなく、持ち出し対象が全て準備済みの場合だけ準備完了と表示する', async () => {
+    const checklist = splitChecklist('2026-08-18');
+    checklist.periods[0].items[1].takeoutQuantity = 1;
+    checklist.periods[0].items[1].checked = true;
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(checklist),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    const summary = await screen.findByRole('region', { name: '準備完了' });
+    expect(summary).toHaveTextContent(/持ち出し対象の準備\s+2 \/ 2/);
+    expect(summary).toHaveTextContent(/数量未設定\s+0カテゴリ/);
+    expect(summary).toHaveTextContent('持ち出し対象内 100%');
+  });
+
+  it('持ち出し対象に未準備がある場合は準備中と表示する', async () => {
+    const checklist = splitChecklist('2026-08-18');
+    checklist.periods[0].items[1].takeoutQuantity = 1;
+    checklist.periods[0].items[1].checked = false;
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(checklist),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    const summary = await screen.findByRole('region', { name: '準備中' });
+    expect(summary).toHaveTextContent(/持ち出し対象の準備\s+1 \/ 2/);
+    expect(summary).not.toHaveTextContent('準備完了');
+  });
+
+  it('持ち出し対象0件でNaNや100%を表示せず、長いカテゴリ名を折り返せる', async () => {
+    const checklist = splitChecklist('2026-08-18');
+    const longCategoryName =
+      'VeryLongCategoryNameWithoutSpacesForResponsiveLayoutCheck1234567890';
+    checklist.periods[0].categories[0].categoryName = longCategoryName;
+    checklist.periods[0].items = [];
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(checklist),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    const summary = await screen.findByRole('region', { name: '確認が必要' });
+    expect(summary).toHaveTextContent(/持ち出し対象の準備\s+0 \/ 0/);
+    expect(summary).not.toHaveTextContent('NaN');
+    expect(summary).not.toHaveTextContent('100%');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getAllByText(longCategoryName)).toHaveLength(2);
+    for (const categoryName of screen.getAllByText(longCategoryName)) {
+      expect(categoryName).toHaveClass('break-words');
+    }
   });
 
   it('未作成の過去日は表なしを表示し、作成操作を出さない', async () => {

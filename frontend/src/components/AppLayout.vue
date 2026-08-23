@@ -94,8 +94,9 @@ async function handleLogout(): Promise<void> {
           <span class="text-xl">FieldFlow</span>
         </RouterLink>
 
+        <!-- 管理者用の項目数でも折り返さない幅を確保し、xl未満は一つのメニューへ集約する。 -->
         <nav
-          class="ml-6 hidden items-center gap-1 md:flex"
+          class="ml-6 hidden flex-nowrap items-center gap-1 whitespace-nowrap xl:flex"
           aria-label="メインナビゲーション"
         >
           <RouterLink
@@ -150,7 +151,7 @@ async function handleLogout(): Promise<void> {
         <button
           ref="mobileMenuButton"
           type="button"
-          class="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#cfdbd5] bg-white text-xl md:hidden"
+          class="ml-auto grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#cfdbd5] bg-white text-xl sm:ml-0 xl:hidden"
           :aria-expanded="mobileMenuOpen"
           aria-controls="mobile-navigation"
           :aria-label="mobileMenuOpen ? 'メニューを閉じる' : 'メニューを開く'"
@@ -164,11 +165,14 @@ async function handleLogout(): Promise<void> {
         v-if="mobileMenuOpen"
         id="mobile-navigation"
         ref="mobileNavigation"
-        class="border-t border-[#cfdbd5] px-4 py-4 md:hidden"
+        class="border-t border-[#cfdbd5] px-4 py-4 xl:hidden"
         aria-label="モバイルナビゲーション"
         @keydown.esc.prevent="closeMobileMenu"
       >
-        <div class="mb-3 flex items-center gap-3 rounded-xl bg-[#e8eee9] p-3">
+        <div
+          class="mb-3 flex items-center gap-3 rounded-xl bg-[#e8eee9] p-3 sm:hidden"
+          aria-label="メニュー内のユーザー情報"
+        >
           <span
             class="grid size-10 place-items-center rounded-full bg-white font-black text-[#0b6b62]"
           >
@@ -229,7 +233,7 @@ async function handleLogout(): Promise<void> {
     </header>
 
     <div class="mx-auto flex max-w-7xl">
-      <aside class="hidden w-64 shrink-0 px-6 py-8 md:block">
+      <aside class="hidden w-64 shrink-0 px-6 py-8 xl:block">
         <nav class="space-y-2" aria-label="アカウントメニュー">
           <RouterLink
             :to="{ name: 'daily-checklist', params: { date: today } }"

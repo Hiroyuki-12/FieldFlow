@@ -13,7 +13,7 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
 }) => {
   await loginThroughUi(page, credentials.worker);
   await expect(
-    page.getByRole("heading", { name: /おはようございます/ }),
+    page.getByRole("heading", { name: /さん、準備を始めましょう。/ }),
   ).toBeVisible();
 
   // 現場利用者の入口であるホームから、今日の表作成フローへ進む。

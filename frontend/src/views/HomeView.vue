@@ -2,7 +2,10 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { type DailyChecklist, getDailyChecklist } from '../api/daily-checklists';
+import {
+  type DailyChecklist,
+  getDailyChecklist,
+} from '../api/daily-checklists';
 import { ApiError } from '../api/errors';
 import ChecklistCreationDialog from '../components/ChecklistCreationDialog.vue';
 import AppNotice from '../components/AppNotice.vue';
@@ -18,8 +21,10 @@ const isLoading = ref(false);
 const creationDialogOpen = ref(false);
 const errorMessage = ref('');
 
-const roleLabel = computed(() =>
-  authStore.user?.role === 'ADMIN' ? '管理者' : '作業者',
+const homeDescription = computed(() =>
+  authStore.user?.role === 'ADMIN'
+    ? `${formatJapaneseDate(today)}。今日の準備状況と管理情報を確認できます。`
+    : `${formatJapaneseDate(today)}。今日の持ち出し準備を確認しましょう。`,
 );
 const selectedItems = computed(
   () =>
@@ -93,25 +98,34 @@ function messageFor(error: unknown): string {
 
 <template>
   <div class="mx-auto max-w-5xl">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
+    <div
+      class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+    >
+      <div class="min-w-0">
         <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">HOME</p>
         <h1
-          class="mt-2 text-3xl font-black tracking-tight sm:text-4xl"
+          class="mt-2 break-words text-3xl font-black tracking-tight sm:text-4xl"
           data-page-heading
           tabindex="-1"
         >
-          おはようございます、{{ authStore.user?.name }}さん
+          {{ authStore.user?.name }}さん、準備を始めましょう。
         </h1>
-        <p class="mt-3 text-[#49666a]">
-          {{ formatJapaneseDate(today) }}。{{ roleLabel }}として安全に準備を始めましょう。
-        </p>
+        <p class="mt-3 text-[#49666a]">{{ homeDescription }}</p>
       </div>
     </div>
 
-    <AppNotice v-if="errorMessage" class="mt-6" tone="error" title="今日のチェック表を読み込めませんでした">
+    <AppNotice
+      v-if="errorMessage"
+      class="mt-6"
+      tone="error"
+      title="今日のチェック表を読み込めませんでした"
+    >
       {{ errorMessage }}
-      <button class="ml-2 min-h-11 font-bold underline" type="button" @click="loadTodayChecklist">
+      <button
+        class="ml-2 min-h-11 font-bold underline"
+        type="button"
+        @click="loadTodayChecklist"
+      >
         再読み込み
       </button>
     </AppNotice>
@@ -120,7 +134,9 @@ function messageFor(error: unknown): string {
       class="mt-8 rounded-3xl border border-[#cfdbd5] bg-[#fffdf8] p-6 shadow-sm sm:p-8"
       aria-labelledby="today-check-title"
     >
-      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div
+        class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between"
+      >
         <div>
           <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">
             TODAY'S PREPARATION
@@ -132,7 +148,10 @@ function messageFor(error: unknown): string {
             今日のチェック表を確認中…
           </p>
           <template v-else-if="checklist">
-            <div class="mt-4 flex flex-wrap gap-2" aria-label="作成済みの時間帯">
+            <div
+              class="mt-4 flex flex-wrap gap-2"
+              aria-label="作成済みの時間帯"
+            >
               <span
                 v-for="period in checklist.periods"
                 :key="period.id"
@@ -179,12 +198,17 @@ function messageFor(error: unknown): string {
 
     <div class="mt-6 grid gap-5 lg:grid-cols-2">
       <section class="rounded-2xl border border-[#cfdbd5] bg-white p-6">
-        <p class="text-xs font-black tracking-wider text-[#6b8285]">OTHER DATE</p>
+        <p class="text-xs font-black tracking-wider text-[#6b8285]">
+          OTHER DATE
+        </p>
         <h2 class="mt-2 text-xl font-black">別の日を確認</h2>
         <p class="mt-2 leading-7 text-[#49666a]">
           過去の記録や未来日の準備を確認できます。
         </p>
-        <form class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" @submit.prevent="openOtherDate">
+        <form
+          class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end"
+          @submit.prevent="openOtherDate"
+        >
           <label class="min-w-0 flex-1">
             <span class="mb-1 block text-sm font-bold">作業日</span>
             <input
@@ -208,17 +232,37 @@ function messageFor(error: unknown): string {
         class="rounded-2xl border border-[#cfdbd5] bg-white p-6"
         aria-labelledby="admin-menu-title"
       >
-        <p class="text-xs font-black tracking-wider text-[#6b8285]">ADMIN MENU</p>
-        <h2 id="admin-menu-title" class="mt-2 text-xl font-black">管理メニュー</h2>
-        <p class="mt-2 leading-7 text-[#49666a]">マスター情報と利用者を管理します。</p>
+        <p class="text-xs font-black tracking-wider text-[#6b8285]">
+          ADMIN MENU
+        </p>
+        <h2 id="admin-menu-title" class="mt-2 text-xl font-black">
+          管理メニュー
+        </h2>
+        <p class="mt-2 leading-7 text-[#49666a]">
+          よく使う管理機能をすぐに開けます。
+        </p>
         <div class="mt-5 flex flex-wrap gap-2">
-          <RouterLink class="min-h-11 rounded-xl border px-4 py-2.5 font-bold" :to="{ name: 'tools' }">道具</RouterLink>
-          <RouterLink class="min-h-11 rounded-xl border px-4 py-2.5 font-bold" :to="{ name: 'categories' }">作業カテゴリ</RouterLink>
-          <RouterLink class="min-h-11 rounded-xl border px-4 py-2.5 font-bold" :to="{ name: 'users' }">ユーザー</RouterLink>
+          <RouterLink
+            class="min-h-11 rounded-xl border px-4 py-2.5 font-bold"
+            :to="{ name: 'tools' }"
+            >道具</RouterLink
+          >
+          <RouterLink
+            class="min-h-11 rounded-xl border px-4 py-2.5 font-bold"
+            :to="{ name: 'categories' }"
+            >作業カテゴリ</RouterLink
+          >
+          <RouterLink
+            class="min-h-11 rounded-xl border px-4 py-2.5 font-bold"
+            :to="{ name: 'users' }"
+            >ユーザー</RouterLink
+          >
         </div>
       </section>
       <section v-else class="rounded-2xl border border-[#cfdbd5] bg-white p-6">
-        <p class="text-xs font-black tracking-wider text-[#6b8285]">HOW TO USE</p>
+        <p class="text-xs font-black tracking-wider text-[#6b8285]">
+          HOW TO USE
+        </p>
         <h2 class="mt-2 text-xl font-black">準備の流れ</h2>
         <p class="mt-2 leading-7 text-[#49666a]">
           作業を選ぶ → 数量を入力 → 準備済みにする、の3ステップです。

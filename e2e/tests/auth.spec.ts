@@ -77,7 +77,7 @@ test("E2E-AUTH-01 仮パスワードを変更し、新しいパスワードで�
     password: credentials.firstChangedPassword,
   });
   await expect(
-    page.getByRole("heading", { name: /おはようございます/ }),
+    page.getByRole("heading", { name: /さん、準備を始めましょう。/ }),
   ).toBeVisible();
 });
 
@@ -86,7 +86,7 @@ test("E2E-AUTH-02 Refresh後にログアウトすると保護画面へ戻れな�
 }) => {
   await loginThroughUi(page, credentials.worker);
   await expect(
-    page.getByRole("heading", { name: /おはようございます/ }),
+    page.getByRole("heading", { name: /さん、準備を始めましょう。/ }),
   ).toBeVisible();
 
   const refreshResponse = await page.request.post(
@@ -97,7 +97,14 @@ test("E2E-AUTH-02 Refresh後にログアウトすると保護画面へ戻れな�
     },
   );
   expect(refreshResponse.ok()).toBe(true);
-  await page.getByRole("button", { name: "ログアウト" }).click();
+  // デスクトップでは個人操作をユーザー情報へ集約しているため、実際の導線どおりメニューを開く。
+  await page
+    .getByRole("button", { name: /アカウントメニューを開く/ })
+    .click();
+  await page
+    .getByRole("navigation", { name: "アカウント操作" })
+    .getByRole("button", { name: "ログアウト" })
+    .click();
   await expect(page.getByRole("heading", { name: "ログイン" })).toBeVisible();
 
   await page.goto("/tools");

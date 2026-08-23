@@ -2,6 +2,31 @@
 
 FieldFlowは、現場作業前の道具忘れと紙のチェック漏れを減らすための、チーム共有型の道具管理・日別チェックアプリです。
 
+## 現在の実装
+
+MVPのアプリケーション機能、ログ・セキュリティ、E2E、性能試験、Cloudflare公開基盤まで実装済みです。AWS課題提出環境は設計済みで、ロードマップ17のTerraform・ECS Fargate・RDS構築は未実装です。
+
+- 認証: JWT Access Token、ローテーションするRefresh Token、Argon2id、初回パスワード変更
+- 管理: ユーザー、作業カテゴリ、道具の一覧・作成・編集・利用停止。道具一覧は作業者も閲覧可能
+- 日別チェック: 1日通し／午前・午後、スナップショット、数量・準備状態の自動保存、設定変更、論理削除・再作成
+- UI: 320pxからデスクトップまでのレスポンシブ表示、キーボード操作、フォーカス制御、状態の文字表示
+- 品質: Frontend／Backend単体・結合テスト、Playwright E2E、k6、GitHub Actions
+
+```text
+FieldFlow/
+├── frontend/    # Vue 3の画面、Router、Pinia、API Client、Vitest
+├── backend/     # NestJS API、TypeORM Entity・Migration、Jest・Testcontainers
+├── cloudflare/  # Workers Static AssetsとRender API proxy
+├── e2e/         # Playwrightの主要操作・レスポンシブE2E
+├── perf/        # k6シナリオと性能試験専用データ準備
+├── docs/        # 現行仕様、設計、運用手順、実装履歴
+├── mock/        # 初期の画面遷移確認用モック
+├── compose.yaml # ローカルMySQL 8.4
+└── render.yaml  # Render Free Web Service設定
+```
+
+現行仕様の入口は[設計資料一覧](docs/README.md)、実装の到達状況は[MVP実装計画](docs/implementation-plan.md)を参照してください。
+
 ## デプロイ環境
 
 FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーションを、目的の異なる二つの公開環境へデプロイします。
@@ -9,13 +34,13 @@ FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーショ�
 | 環境 | 目的 | 構成 | 状態 |
 | --- | --- | --- | --- |
 | Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Workers Free + Render Free + Aiven MySQL 8.4 | 基盤公開・疎通確認済み（利用者操作smoke確認中） |
-| AWS課題提出環境 | AIエンジニアコース中級編の課題提出・実務構成検証 | S3 + CloudFront + ALB + ECS Fargate + RDS MySQL 8.4 + Terraform | ロードマップ17で実装予定 |
+| AWS課題提出環境 | AIエンジニアコース中級編の課題提出・実務構成検証 | S3 + CloudFront + ALB + ECS Fargate + RDS MySQL 8.4 + Terraform | 設計済み・ロードマップ17の実装は未着手 |
 
 Cloudflareを画面とAPIの単一公開Originにし、`/api/*`だけをRender FreeのNestJSへproxyします。Renderは15分間アクセスがないと停止し、再起動に約1分かかる場合があるため、その間はVueが起動待ち画面を表示してhealthを自動再試行します。Workers Static Assets、Workers Free、Render Free、Aiven MySQL Freeから開始し、各無料枠と停止通知を確認します。AWS環境は学習・課題レビューに必要な期間だけ別途構築します。詳細は[Cloudflare・Render・Aiven公開構成](docs/design/cloudflare-architecture.md)を参照してください。
 
 公開URL: [https://fieldflow.fieldflow-portfolio.workers.dev](https://fieldflow.fieldflow-portfolio.workers.dev)
 
-公開URLの`/`とSPA直リンク、Worker経由の`/api/health`は200を確認済みです。Renderの業務APIは共有鍵なしの直接アクセスを403で拒否します。デモアカウントは初回パスワード変更と利用者操作smoke確認後に案内し、実際の秘密値や管理用認証情報はREADMEへ記載しません。
+2026年8月23日時点で、公開URLの`/`とSPA直リンク、Worker経由の`/api/health`が200を返すことを再確認済みです。Renderの業務APIは共有鍵なしの直接アクセスを403で拒否します。デモアカウントは初回パスワード変更と利用者操作smoke確認後に案内し、実際の秘密値や管理用認証情報はREADMEへ記載しません。
 
 ## 必要な環境
 

@@ -25,9 +25,10 @@ AI エンジニアコース中級編の最終課題としてブラッシュア�
 ## 参照元アプリ
 
 旧アプリは FieldFlow の直接のベースとして参照する。
+次のパスは FieldFlow リポジトリルートを基準とする。
 
-- バックエンド: `/Users/ohtsukahiroyuki/Desktop/01_developProject/tool-management`
-- フロントエンド: `/Users/ohtsukahiroyuki/Desktop/01_developProject/tool-management-frontend`
+- バックエンド: `../../tool-management`
+- フロントエンド: `../../tool-management-frontend`
 
 旧アプリの概要:
 

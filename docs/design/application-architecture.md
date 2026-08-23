@@ -26,11 +26,13 @@
 frontend/src/
 ├── api/          # Axios、API型、機能別クライアント
 ├── components/   # 再利用UI
-├── features/     # auth/users/categories/tools/checklists
+├── composables/  # ダイアログなど複数画面で使うUIロジック
 ├── router/       # 認証・ロール・初回変更ガード
 ├── stores/       # Pinia（認証と最小限の共有状態）
-├── views/        # 画面単位
-└── styles/       # Tailwindテーマと共通スタイル
+├── styles/       # Tailwindテーマと共通スタイル
+├── test/         # MSW serverとVitest共通setup
+├── utils/        # 業務日付など副作用のない共通処理
+└── views/        # 画面単位
 ```
 
 - サーバーデータを不必要にPiniaへ複製せず、画面単位でAPIから取得する。
@@ -42,15 +44,19 @@ frontend/src/
 
 ```text
 backend/src/
-├── auth/ users/ categories/ tools/ daily-checklists/
+├── auth/                     # 認証API、Token・Cookie、Guard
+├── users/ categories/ tools/ daily-checklists/
 │   ├── *.controller.ts   # HTTP、DTO、認可宣言
 │   ├── *.service.ts      # 業務ルール、トランザクション
-│   ├── dto/              # 入出力検証
-│   └── entities/         # TypeORM Entity
-├── common/               # Guard、Filter、Interceptor、エラー
-├── config/               # 型付き環境変数
-├── database/migrations/  # TypeORM Migration
-├── health/               # /api/health
+│   └── dto/              # 入力検証
+├── common/logging/           # JSONログ、requestId、Filter、Interceptor
+├── common/security/          # proxy入口保護、パスワードhash、レート制限定数
+├── config/                   # 環境変数schema
+├── database/
+│   ├── entities/             # 全TypeORM Entity
+│   ├── migrations/           # TypeORM Migration
+│   └── seeds/                # 開発・E2E・性能試験Seed
+├── health/                   # /api/health
 └── main.ts
 ```
 

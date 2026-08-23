@@ -56,9 +56,10 @@
 
 ## 3. 画面テスト
 
-- 360px、768px、1280pxでログイン、日別チェック、各管理画面を確認する。
+- 320px、390px、768px、1024px、1280px以上の代表幅で、ログイン、共通ナビゲーション、日別チェック、各管理画面を確認する。
 - キーボード操作、フォーカス、ラベル、ダイアログ、エラー通知を確認する。
-- モバイルの日付・カテゴリ設定開閉、道具行の1〜2行表示、ダイアログ固定操作領域、遷移後の先頭表示を確認する。
+- モバイルの日付・カテゴリ設定開閉、道具行の1〜2行表示、固定ヘッダー／スクロール本文／固定フッターのダイアログ、遷移後の先頭表示を確認する。
+- 約200%の文字拡大、長いユーザー・カテゴリ・道具名、低い表示領域でも、横スクロールや操作フッターとの重なりがなく主要操作を続けられることを確認する。
 - MSWで401→Refresh→再試行、Refresh失敗、409競合、500、通信断を再現する。
 - スナップショットは安易に使わず、利用者が見る文字と操作結果を検証する。
 
@@ -66,6 +67,7 @@
 
 | ID | シナリオ |
 | --- | --- |
+| [E2E-AUTH-00](../../e2e/tests/auth.spec.ts) | 認証失敗の内訳を漏らさず、入力エラーからパスワード再入力へ誘導 |
 | [E2E-AUTH-01](../../e2e/tests/auth.spec.ts) | 仮パスワードログイン→変更要求→再ログイン |
 | [E2E-AUTH-02](../../e2e/tests/auth.spec.ts) | 通常ログイン→Refresh→ログアウト→保護画面拒否 |
 | [E2E-ADMIN-01](../../e2e/tests/admin.spec.ts) | 管理者がカテゴリ・道具・作業者を作成 |
@@ -75,6 +77,10 @@
 | [E2E-CHECK-03](../../e2e/tests/daily-checklist.spec.ts) | 過去日閲覧と編集不可状態 |
 | [E2E-CHECK-04](../../e2e/tests/daily-checklist.spec.ts) | 今日の表を修正し、入力影響の確認後に保存 |
 | [E2E-CHECK-05](../../e2e/tests/daily-checklist.spec.ts) | 今日の表を削除し、同じ日に再作成 |
+| [AUTH-LAYOUT](../../e2e/tests/layout-responsive.spec.ts) | 320〜1366pxのログイン・パスワード変更、入力エラー時のフォーカスと横幅 |
+| [LAYOUT](../../e2e/tests/layout-responsive.spec.ts) | `xl`未満のハンバーガー、`xl`以上のヘッダーナビゲーション、アカウント操作、長いユーザー名 |
+| [CHECKLIST-DIALOG](../../e2e/tests/layout-responsive.spec.ts) | 320・390・1280pxの必須カテゴリ案内、スクロール本文、固定操作領域 |
+| [CHECKLIST-RESPONSIVE](../../e2e/tests/layout-responsive.spec.ts) | 320pxと文字拡大時の状態表示、保存再試行、危険操作 |
 
 - `NODE_ENV=test`かつDB名が厳密に`fieldflow_e2e`の場合だけ動くE2E専用Seedを使う。前回分は`E2E `／`e2e.`接頭辞で識別し、TRUNCATEせず外部キーの子から削除する。
 - 共有する業務日・Seedを並列更新しないようChromium 1 project・worker 1本・retryなしで実行する。

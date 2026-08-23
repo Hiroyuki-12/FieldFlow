@@ -24,6 +24,7 @@
 | REQ-CHECK-09 | 数量未設定を含む完了判定と作成・編集の入力制御 | SCR-10,11 | CHECK-01,02,05 | daily_checklist_period_categories, daily_checklist_items | [UT-CHECK](../../frontend/src/views/DailyChecklistView.test.ts), [UT-CHECK-DIALOG](../../frontend/src/components/ChecklistCreationDialog.test.ts), [E2E-CHECK](../../e2e/tests/daily-checklist.spec.ts), [E2E-LAYOUT](../../e2e/tests/layout-responsive.spec.ts) |
 | NFR-PERF-01 | 20同時・p95 500ms | — | AUTH/TOOL/CHECK | index全般 | [PERF-SMOKE](../../perf/scenarios/smoke.ts) / [PERF-CHECK](../../perf/scenarios/checklist.ts) / [PERF-MASTER](../../perf/scenarios/master.ts) |
 | NFR-SEC-01 | RBAC・秘密保護 | 全保護画面 | 全保護API | password/token hash | IT-SEC, [E2E-ADMIN-02](../../e2e/tests/admin.spec.ts) |
+| NFR-UX-01 | 320px以上のレスポンシブ・キーボード・状態通知 | 全主要画面 | — | — | Frontend画面テスト, [E2E-LAYOUT](../../e2e/tests/layout-responsive.spec.ts) |
 | NFR-OPS-01 | requestId・JSONログ | エラー表示 | 全API | — | logging integration |
 
 ## レビュー規則

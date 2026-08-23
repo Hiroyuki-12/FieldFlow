@@ -23,6 +23,7 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
     name: "チェック表を作成",
   });
   await expect(createButton).toBeDisabled();
+  // 午前だけ選んだ段階で送信できる回帰を防ぎ、両時間帯の入力を要求する。
   await dialog.getByLabel("午前・午後").check();
   await dialog.getByLabel("E2E 電気工事").check();
   await expect(createButton).toBeDisabled();

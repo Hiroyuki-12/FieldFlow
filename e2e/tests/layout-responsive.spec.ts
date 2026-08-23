@@ -157,14 +157,42 @@ for (const width of [320, 390, 1280] as const) {
   test(`CHECKLIST-DIALOG-${width} 未選択理由と操作ボタンが表示領域に収まる`, async ({
     page,
   }) => {
+    const longCategoryName =
+      "E2E 非常に長いカテゴリ名でもチェック表作成ダイアログの横幅を超えずに折り返される作業";
     await page.setViewportSize({ width, height: width < 500 ? 568 : 900 });
     await loginThroughUi(page, credentials.worker);
     await page.goto(`/daily-checklists/${addDays(todayInTokyo(), 3)}`);
+    await page.route("**/api/v1/tools?**", async (route) => {
+      const response = await route.fetch();
+      const payload = (await response.json()) as {
+        categories: Array<Record<string, unknown>>;
+        [key: string]: unknown;
+      };
+      await route.fulfill({
+        response,
+        json: {
+          ...payload,
+          categories: [
+            ...payload.categories,
+            {
+              id: `layout-long-category-${width}`,
+              name: longCategoryName,
+              categoryType: "WORK",
+              status: "ACTIVE",
+              displayOrder: 999,
+            },
+          ],
+        },
+      });
+    });
     await page
       .getByRole("button", { name: "この日のチェック表を作成" })
       .click();
 
     const dialog = page.getByRole("dialog", { name: /チェック表を作成/ });
+    const header = dialog.locator("header");
+    const body = dialog.locator(".overflow-y-auto");
+    const footer = dialog.locator("footer");
     const createButton = dialog.getByRole("button", {
       name: "チェック表を作成",
     });
@@ -172,21 +200,68 @@ for (const width of [320, 390, 1280] as const) {
     await expect(createButton).toBeDisabled();
     await expect(createButton).toHaveCSS("cursor", "not-allowed");
     await expect(
-      dialog.getByText("作業カテゴリを1つ以上選択すると作成・保存できます。"),
+      dialog.getByText("作業カテゴリを1つ以上選択すると作成できます。"),
     ).toBeVisible();
+    await expect(dialog.getByText(longCategoryName)).toBeVisible();
+    await expect(body).toHaveCSS("overflow-y", "auto");
 
     const dialogBox = await dialog.boundingBox();
+    const bodyBox = await body.boundingBox();
+    const footerBoxBeforeSelection = await footer.boundingBox();
+    const headerBoxBeforeScroll = await header.boundingBox();
     expect(dialogBox).not.toBeNull();
+    expect(bodyBox).not.toBeNull();
+    expect(footerBoxBeforeSelection).not.toBeNull();
+    expect(headerBoxBeforeScroll).not.toBeNull();
     expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
     expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width);
+    // flex配置の本文末尾とフッターを比較し、固定操作部が本文へ重ならないことを保証する。
+    expect(bodyBox!.y + bodyBox!.height).toBeLessThanOrEqual(
+      footerBoxBeforeSelection!.y + 1,
+    );
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
 
-    await dialog.getByLabel("E2E 電気工事").check();
+    const longCategoryBox = await dialog.getByText(longCategoryName).boundingBox();
+    expect(longCategoryBox).not.toBeNull();
+    expect(longCategoryBox!.width).toBeLessThanOrEqual(bodyBox!.width);
+
+    await dialog.getByLabel(longCategoryName).check();
     await expect(createButton).toBeEnabled();
-    await expect(dialog.locator("footer")).toBeVisible();
+    await expect(footer).toBeVisible();
+    const footerBoxAfterSelection = await footer.boundingBox();
+    expect(footerBoxAfterSelection).not.toBeNull();
+    // 補足文が消えても予約領域を残し、操作ボタンが大きく跳ねないことを確認する。
+    expect(
+      Math.abs(
+        footerBoxAfterSelection!.y - footerBoxBeforeSelection!.y,
+      ),
+    ).toBeLessThanOrEqual(1);
+
+    await dialog.getByLabel("午前・午後").check();
+    const morningButton = dialog.getByRole("button", { name: /午前/ });
+    const afternoonButton = dialog.getByRole("button", { name: /午後/ });
+    await expect(morningButton).toContainText("(0)");
+    await dialog.getByLabel(longCategoryName).check();
+    await expect(morningButton).toContainText("(1)");
+    await afternoonButton.click();
+    await expect(afternoonButton).toContainText("(0)");
+    await expect(
+      dialog.getByText("午後の作業カテゴリを1つ以上選択してください。"),
+    ).toBeVisible();
+
+    // 本文を動かしても、ヘッダーと操作フッターはダイアログ内の同じ位置に残る。
+    await body.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    const headerBoxAfterScroll = await header.boundingBox();
+    const footerBoxAfterScroll = await footer.boundingBox();
+    expect(headerBoxAfterScroll).not.toBeNull();
+    expect(footerBoxAfterScroll).not.toBeNull();
+    expect(headerBoxAfterScroll!.y).toBe(headerBoxBeforeScroll!.y);
+    expect(footerBoxAfterScroll!.y).toBe(footerBoxAfterSelection!.y);
   });
 }

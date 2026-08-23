@@ -39,7 +39,7 @@ const isSaving = ref(false);
 const errorMessage = ref('');
 const selectionErrorMessage = ref('');
 const confirmationRequired = ref(false);
-const categorySelectionFieldset = ref<HTMLElement | null>(null);
+const categorySelectionFieldset = ref<HTMLFieldSetElement | null>(null);
 const isEditing = computed(() => Boolean(props.checklist));
 const hasEnteredItems = computed(() =>
   Boolean(
@@ -48,43 +48,66 @@ const hasEnteredItems = computed(() =>
     ),
   ),
 );
-const missingSplitPeriods = computed(() =>
-  (['MORNING', 'AFTERNOON'] as const).filter(
-    (period) => selectedCategoryIds.value[period].length === 0,
-  ),
-);
-const hasValidCategorySelection = computed(() =>
-  scheduleMode.value === 'FULL_DAY'
-    ? selectedCategoryIds.value.FULL_DAY.length > 0
-    : missingSplitPeriods.value.length === 0,
-);
-const categorySelectionRequirement = computed(() => {
-  if (hasValidCategorySelection.value) return '';
+const emptyCategoryMessage =
+  '選択できる作業カテゴリがありません。管理者へカテゴリの登録・設定確認を依頼してください。';
+
+type SplitPeriod = Extract<ChecklistPeriod, 'MORNING' | 'AFTERNOON'>;
+
+/**
+ * 必須選択の条件と案内文を一か所で導出する。
+ * ボタンとsubmitが別々の式を持つと、押せるのに保存できない状態へ戻るため、必ずこの結果を共有する。
+ */
+const categorySelectionState = computed(() => {
   if (scheduleMode.value === 'FULL_DAY') {
-    return '作業カテゴリを1つ以上選択すると作成・保存できます。';
+    const isValid = selectedCategoryIds.value.FULL_DAY.length > 0;
+    return {
+      isValid,
+      missingSplitPeriods: [] as SplitPeriod[],
+      disabledReason: isValid
+        ? ''
+        : `作業カテゴリを1つ以上選択すると${isEditing.value ? '保存' : '作成'}できます。`,
+      validationMessage: isValid
+        ? ''
+        : '作業カテゴリを1つ以上選択してください。',
+    };
   }
-  if (missingSplitPeriods.value.length === 2) {
-    return '午前と午後の両方で、作業カテゴリを1つ以上選択してください。';
-  }
-  return `${missingSplitPeriods.value[0] === 'MORNING' ? '午前' : '午後'}の作業カテゴリを1つ以上選択してください。`;
+
+  const missingSplitPeriods = (['MORNING', 'AFTERNOON'] as const).filter(
+    (period) => selectedCategoryIds.value[period].length === 0,
+  );
+  const isValid = missingSplitPeriods.length === 0;
+  const validationMessage =
+    missingSplitPeriods.length === 2
+      ? '午前と午後の作業カテゴリを1つ以上選択してください。'
+      : missingSplitPeriods.length === 1
+        ? `${missingSplitPeriods[0] === 'MORNING' ? '午前' : '午後'}の作業カテゴリを1つ以上選択してください。`
+        : '';
+
+  return {
+    isValid,
+    missingSplitPeriods,
+    disabledReason: validationMessage,
+    validationMessage,
+  };
 });
 const isSubmitDisabled = computed(
   () =>
     isSaving.value ||
     isLoadingCategories.value ||
     categories.value.length === 0 ||
-    !hasValidCategorySelection.value,
+    !categorySelectionState.value.isValid,
 );
 const submitDisabledReason = computed(() => {
-  if (isSaving.value) return '';
+  if (isSaving.value)
+    return `${isEditing.value ? '保存' : '作成'}処理中です。完了までお待ちください。`;
   if (isLoadingCategories.value) return '作業カテゴリを読み込んでいます。';
-  if (categories.value.length === 0)
-    return '選択できる作業カテゴリがありません。';
-  return categorySelectionRequirement.value;
+  if (categories.value.length === 0) return emptyCategoryMessage;
+  return categorySelectionState.value.disabledReason;
 });
 const categoryDescriptionIds = computed(() =>
   [
     'checklist-category-help',
+    isLoadingCategories.value ? 'checklist-category-loading' : '',
     categories.value.length === 0 && !isLoadingCategories.value
       ? 'checklist-category-empty'
       : '',
@@ -131,7 +154,8 @@ watch(
   () => {
     confirmationRequired.value = false;
     if (selectionErrorMessage.value) {
-      selectionErrorMessage.value = categorySelectionRequirement.value;
+      selectionErrorMessage.value =
+        categorySelectionState.value.validationMessage;
     }
   },
   { deep: true },
@@ -141,10 +165,6 @@ async function loadCategories(): Promise<void> {
   isLoadingCategories.value = true;
   try {
     categories.value = await listChecklistCategoryOptions();
-    if (categories.value.length === 0) {
-      errorMessage.value =
-        '選択できる作業カテゴリがありません。管理者へカテゴリの登録を依頼してください。';
-    }
   } catch (error) {
     errorMessage.value = messageFor(error);
   } finally {
@@ -162,17 +182,32 @@ function requestClose(): void {
  */
 async function focusInvalidCategorySelection(): Promise<void> {
   if (scheduleMode.value === 'SPLIT') {
-    activeSplitPeriod.value = missingSplitPeriods.value[0] ?? 'MORNING';
+    activeSplitPeriod.value =
+      categorySelectionState.value.missingSplitPeriods[0] ?? 'MORNING';
   }
   await nextTick();
-  categorySelectionFieldset.value?.focus({ preventScroll: true });
-  categorySelectionFieldset.value?.scrollIntoView?.({
+  const firstCheckbox =
+    categorySelectionFieldset.value?.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]:not(:disabled)',
+    );
+  const focusTarget = firstCheckbox ?? categorySelectionFieldset.value;
+  // 修正をすぐ始められる入力へ直接フォーカスし、モーダル内のフォーカストラップも維持する。
+  focusTarget?.focus({ preventScroll: true });
+  focusTarget?.scrollIntoView?.({
     behavior: 'smooth',
     block: 'center',
   });
 }
 
 async function submit(): Promise<void> {
+  // disabledを迂回したsubmitでも、読込案内・0件案内を選択エラーと競合させず、APIも二重に呼ばない。
+  if (
+    isSaving.value ||
+    isLoadingCategories.value ||
+    categories.value.length === 0
+  )
+    return;
+
   const periods =
     scheduleMode.value === 'FULL_DAY'
       ? [
@@ -192,8 +227,10 @@ async function submit(): Promise<void> {
           },
         ];
 
-  if (periods.some((period) => period.categoryIds.length === 0)) {
-    selectionErrorMessage.value = categorySelectionRequirement.value;
+  // UIと同じcomputedを使い、表示上の有効条件と防御的バリデーションの食い違いを防ぐ。
+  if (!categorySelectionState.value.isValid) {
+    selectionErrorMessage.value =
+      categorySelectionState.value.validationMessage;
     errorMessage.value = '';
     await focusInvalidCategorySelection();
     return;
@@ -398,7 +435,12 @@ function messageFor(error: unknown): string {
           <p id="checklist-category-help" class="mt-1 text-sm text-[#49666a]">
             1つ以上選択してください。共通の道具は自動で追加されます。
           </p>
-          <p v-if="isLoadingCategories" class="mt-4" role="status">
+          <p
+            v-if="isLoadingCategories"
+            id="checklist-category-loading"
+            class="mt-4"
+            role="status"
+          >
             作業カテゴリを読み込み中…
           </p>
           <p
@@ -407,7 +449,7 @@ function messageFor(error: unknown): string {
             class="mt-4 rounded-xl border border-[#d7c9aa] bg-[#fffaf0] p-3 text-sm font-bold text-[#624b2f]"
             role="status"
           >
-            選択できる作業カテゴリがありません。
+            {{ emptyCategoryMessage }}
           </p>
           <div v-else class="mt-4 grid gap-3 sm:grid-cols-2">
             <label
@@ -452,14 +494,17 @@ function messageFor(error: unknown): string {
       <footer
         class="shrink-0 border-t border-[#cfdbd5] bg-[#fffdf8] px-5 py-4 sm:px-7"
       >
-        <p
-          v-if="submitDisabledReason"
-          id="checklist-submit-disabled-reason"
-          class="mb-3 rounded-xl bg-[#fff0df] px-3 py-2 text-sm font-bold leading-5 text-[#7a421e]"
-          role="status"
-        >
-          <span aria-hidden="true">ℹ</span> {{ submitDisabledReason }}
-        </p>
+        <!-- 案内文が消えても領域を残し、選択のたびに操作ボタンが上下へ跳ねることを防ぐ。 -->
+        <div class="min-h-16" aria-live="polite">
+          <p
+            v-if="submitDisabledReason"
+            id="checklist-submit-disabled-reason"
+            class="mb-3 rounded-xl bg-[#fff0df] px-3 py-2 text-sm font-bold leading-5 text-[#7a421e]"
+            role="status"
+          >
+            <span aria-hidden="true">ℹ</span> {{ submitDisabledReason }}
+          </p>
+        </div>
         <div class="app-dialog-actions">
           <button
             type="button"

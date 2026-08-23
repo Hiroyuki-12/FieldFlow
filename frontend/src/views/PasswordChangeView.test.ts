@@ -1,13 +1,45 @@
 import { createPinia } from 'pinia';
 import { fireEvent, render, screen } from '@testing-library/vue';
+import { http, HttpResponse } from 'msw';
 import { createMemoryHistory } from 'vue-router';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createAppRouter } from '../router';
 import { useAuthStore } from '../stores/auth';
+import { server } from '../test/server';
 import PasswordChangeView from './PasswordChangeView.vue';
 
 describe('PasswordChangeView', () => {
+  it('利用者向けには全端末ログアウトと新しいパスワードでの再ログインを案内する', async () => {
+    const pinia = createPinia();
+    const authStore = useAuthStore(pinia);
+    authStore.applySession({
+      accessToken: 'access-token',
+      expiresIn: 900,
+      user: {
+        id: 'user-1',
+        name: '利用 太郎',
+        loginId: 'user.one',
+        role: 'WORKER',
+        mustChangePassword: false,
+      },
+    });
+    const router = createAppRouter(pinia, createMemoryHistory());
+    await router.push('/password');
+
+    render(PasswordChangeView, { global: { plugins: [pinia, router] } });
+
+    expect(
+      screen.getByText('変更後はすべての端末からログアウトされます。'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('新しいパスワードで再ログインしてください。'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Token|Access Token|Refresh Token/),
+    ).not.toBeInTheDocument();
+  });
+
   it('新しいパスワードの確認不一致をAPI送信前に表示する', async () => {
     const pinia = createPinia();
     const authStore = useAuthStore(pinia);
@@ -70,6 +102,15 @@ describe('PasswordChangeView', () => {
     await router.push('/change-password/initial');
 
     render(PasswordChangeView, { global: { plugins: [pinia, router] } });
+    expect(
+      screen.getByText('変更後はすべての端末からログアウトされます。'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('新しいパスワードで再ログインしてください。'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Token|Access Token|Refresh Token/),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent(
       '仮パスワードと同じパスワードは設定できません。',
     );
@@ -147,5 +188,53 @@ describe('PasswordChangeView', () => {
       screen.getByRole('button', { name: '現在のパスワードを隠す' }),
     );
     expect(current).toHaveAttribute('type', 'password');
+  });
+
+  it('通常変更の成功後は認証状態を破棄し、ログイン画面へ戻す', async () => {
+    server.use(
+      http.patch(
+        '*/api/v1/auth/password',
+        () => new HttpResponse(null, { status: 204 }),
+      ),
+    );
+    const pinia = createPinia();
+    const authStore = useAuthStore(pinia);
+    authStore.applySession({
+      accessToken: 'access-token',
+      expiresIn: 900,
+      user: {
+        id: 'user-1',
+        name: '利用 太郎',
+        loginId: 'user.one',
+        role: 'WORKER',
+        mustChangePassword: false,
+      },
+    });
+    const router = createAppRouter(pinia, createMemoryHistory());
+    await router.push('/password');
+
+    render(PasswordChangeView, { global: { plugins: [pinia, router] } });
+    await fireEvent.update(
+      screen.getByLabelText('現在のパスワード'),
+      'current-password',
+    );
+    await fireEvent.update(
+      screen.getByLabelText('新しいパスワード'),
+      'new-password-123',
+    );
+    await fireEvent.update(
+      screen.getByLabelText('新しいパスワード（確認）'),
+      'new-password-123',
+    );
+    await fireEvent.click(
+      screen.getByRole('button', { name: '変更して再ログイン' }),
+    );
+
+    // Backendの全端末失効に合わせ、Frontendにも古い認証情報を残さない。
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.name).toBe('login'),
+    );
+    expect(router.currentRoute.value.query.passwordChanged).toBe('true');
+    expect(authStore.isAuthenticated).toBe(false);
   });
 });

@@ -3,6 +3,29 @@ import { expect, test } from "@playwright/test";
 import { credentials, loginThroughUi } from "../fixtures/auth.ts";
 import { e2eApiUrl, e2eBaseUrl } from "../support/environment.ts";
 
+test("E2E-AUTH-00 認証失敗の内訳を漏らさず、パスワードを再入力できる", async ({
+  page,
+}) => {
+  // 実在IDかどうかをBackendへ問い合わせず、401時の画面表現だけを固定して情報漏洩を防ぐ。
+  await page.route("**/api/v1/auth/login", async (route) => {
+    await route.fulfill({ status: 401, body: "" });
+  });
+  await page.goto("/login");
+  await page.getByLabel("ログインID").fill("unknown.user");
+  const password = page.getByLabel("パスワード");
+  await password.fill("unknown-password");
+  await page.getByRole("button", { name: "ログイン" }).click();
+
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "ログインIDまたはパスワードが正しくありません。",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText(/存在しません|パスワードだけ/)).toHaveCount(0);
+  await expect(password).toBeFocused();
+  await expect(password).toHaveAttribute("type", "password");
+});
+
 test("E2E-AUTH-01 仮パスワードを変更し、新しいパスワードで再ログインできる", async ({
   page,
 }) => {
@@ -10,6 +33,15 @@ test("E2E-AUTH-01 仮パスワードを変更し、新しいパスワードで�
   await expect(
     page.getByRole("heading", { name: "初回パスワード変更" }),
   ).toBeVisible();
+  await expect(
+    page.getByText("変更後はすべての端末からログアウトされます。"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("新しいパスワードで再ログインしてください。"),
+  ).toBeVisible();
+  await expect(page.getByText(/Token|Access Token|Refresh Token/)).toHaveCount(
+    0,
+  );
 
   // Frontendを経由しないリクエストでも、Backendが初回変更状態を守ることを確認する。
   const unchangedResponse = await page.request.patch(
@@ -98,9 +130,7 @@ test("E2E-AUTH-02 Refresh後にログアウトすると保護画面へ戻れな�
   );
   expect(refreshResponse.ok()).toBe(true);
   // デスクトップでは個人操作をユーザー情報へ集約しているため、実際の導線どおりメニューを開く。
-  await page
-    .getByRole("button", { name: /アカウントメニューを開く/ })
-    .click();
+  await page.getByRole("button", { name: /アカウントメニューを開く/ }).click();
   await page
     .getByRole("navigation", { name: "アカウント操作" })
     .getByRole("button", { name: "ログアウト" })

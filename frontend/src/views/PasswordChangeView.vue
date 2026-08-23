@@ -119,7 +119,8 @@ async function backToLogin(): Promise<void> {
       <div
         class="mt-5 rounded-xl border border-[#c5ddeb] bg-[#e0eef6] p-4 text-sm leading-6 text-[#28566f]"
       >
-        変更後はすべての端末のTokenを無効化し、新しいパスワードでの再ログインが必要です。
+        <p>変更後はすべての端末からログアウトされます。</p>
+        <p class="mt-1">新しいパスワードで再ログインしてください。</p>
       </div>
 
       <div

@@ -51,6 +51,21 @@ const dialogTitle = computed(() => {
   if (dialogMode.value === 'reissue') return '仮パスワード再発行の確認';
   return '仮パスワードを発行しました';
 });
+const dialogDescription = computed(() => {
+  if (dialogMode.value === 'create') {
+    return '新しい利用者の名前、ログインID、権限を入力してください。';
+  }
+  if (dialogMode.value === 'edit') {
+    return '利用者の名前、ログインID、権限を変更します。';
+  }
+  if (dialogMode.value === 'status') {
+    return '選択した利用者の利用状態を変更します。';
+  }
+  if (dialogMode.value === 'reissue') {
+    return '再発行による影響を確認してから操作してください。';
+  }
+  return '発行された仮パスワードを安全な方法で本人へ共有してください。';
+});
 
 watch(dialogMode, async (mode) => {
   if (mode) {
@@ -104,10 +119,7 @@ function openEdit(user: ManagedUser): void {
   dialogMode.value = 'edit';
 }
 
-function openAction(
-  user: ManagedUser,
-  mode: 'status' | 'reissue',
-): void {
+function openAction(user: ManagedUser, mode: 'status' | 'reissue'): void {
   errorMessage.value = '';
   selectedUser.value = user;
   dialogMode.value = mode;
@@ -233,7 +245,11 @@ function messageFor(error: unknown): string {
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="mb-1 text-sm font-bold text-[#0b6b62]">管理機能</p>
-        <h1 class="text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+        <h1
+          class="text-3xl font-black tracking-tight"
+          data-page-heading
+          tabindex="-1"
+        >
           ユーザー管理
         </h1>
         <p class="mt-2 text-sm text-[#49666a]">
@@ -440,65 +456,136 @@ function messageFor(error: unknown): string {
       ref="dialog"
       class="app-dialog w-[min(92vw,32rem)] rounded-2xl border-0 bg-white p-0 shadow-2xl"
       aria-labelledby="user-dialog-title"
+      aria-describedby="user-dialog-description"
       @cancel.prevent="closeDialog"
       @keydown="trapFocus"
     >
-      <div class="max-h-[90dvh] overflow-y-auto p-6" @keydown.esc="closeDialog">
-        <h2
-          id="user-dialog-title"
-          class="sticky top-0 z-10 -mx-6 -mt-6 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
+      <div
+        class="flex min-h-0 max-h-[min(90dvh,56rem)] max-w-full flex-col overflow-hidden"
+        @keydown.esc="closeDialog"
+      >
+        <!-- 見出しは縮ませず、本文をスクロールしても操作対象を見失わないよう上部に残す。 -->
+        <header class="shrink-0 border-b border-[#cfdbd5] bg-white px-6 py-5">
+          <h2 id="user-dialog-title" class="text-xl font-black">
+            {{ dialogTitle }}
+          </h2>
+          <p id="user-dialog-description" class="mt-1 text-sm text-[#49666a]">
+            {{ dialogDescription }}
+          </p>
+        </header>
+
+        <!-- 高さが不足する小画面では入力本文だけをスクロールし、ヘッダーと操作ボタンを重ねない。 -->
+        <div
+          class="app-dialog-body min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 py-5"
+          data-dialog-scroll-region
         >
-          {{ dialogTitle }}
-        </h2>
-        <p
-          v-if="errorMessage"
-          id="user-dialog-error"
-          class="mt-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </p>
-        <form
-          v-if="dialogMode === 'create' || dialogMode === 'edit'"
-          class="mt-5 space-y-4"
-          @submit.prevent="saveUser"
-        >
-          <label class="block"
-            ><span class="mb-1 block font-bold">名前</span
-            ><input
-              v-model="form.name"
-              class="min-h-11 w-full rounded-xl border px-3"
-              maxlength="100"
-              required
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="user-dialog-error"
-          /></label>
-          <label class="block"
-            ><span class="mb-1 block font-bold">ログインID</span
-            ><input
-              v-model="form.loginId"
-              class="min-h-11 w-full rounded-xl border px-3"
-              minlength="4"
-              maxlength="50"
-              pattern="[A-Za-z0-9._-]+"
-              required
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="user-dialog-error"
-          /></label>
-          <label class="block"
-            ><span class="mb-1 block font-bold">権限</span
-            ><select
-              v-model="form.role"
-              class="min-h-11 w-full rounded-xl border px-3"
-              :disabled="selectedUser?.id === authStore.user?.id"
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="user-dialog-error"
-            >
-              <option value="ADMIN">管理者</option>
-              <option value="WORKER">作業者</option>
-            </select></label
+          <p
+            v-if="errorMessage"
+            id="user-dialog-error"
+            class="mb-5 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
+            role="alert"
           >
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+            {{ errorMessage }}
+          </p>
+          <form
+            v-if="dialogMode === 'create' || dialogMode === 'edit'"
+            id="user-dialog-form"
+            class="space-y-4"
+            @submit.prevent="saveUser"
+          >
+            <label class="block"
+              ><span class="mb-1 block font-bold">名前</span
+              ><input
+                v-model="form.name"
+                class="min-h-11 w-full rounded-xl border px-3"
+                maxlength="100"
+                required
+                :aria-invalid="Boolean(errorMessage)"
+                :aria-describedby="
+                  errorMessage ? 'user-dialog-error' : undefined
+                "
+            /></label>
+            <label class="block"
+              ><span class="mb-1 block font-bold">ログインID</span
+              ><input
+                v-model="form.loginId"
+                class="min-h-11 w-full rounded-xl border px-3"
+                minlength="4"
+                maxlength="50"
+                pattern="[A-Za-z0-9._-]+"
+                required
+                :aria-invalid="Boolean(errorMessage)"
+                :aria-describedby="
+                  errorMessage ? 'user-dialog-error' : undefined
+                "
+            /></label>
+            <label class="block"
+              ><span class="mb-1 block font-bold">権限</span
+              ><select
+                v-model="form.role"
+                class="min-h-11 w-full rounded-xl border px-3"
+                :disabled="selectedUser?.id === authStore.user?.id"
+                :aria-invalid="Boolean(errorMessage)"
+                :aria-describedby="
+                  errorMessage ? 'user-dialog-error' : undefined
+                "
+              >
+                <option value="ADMIN">管理者</option>
+                <option value="WORKER">作業者</option>
+              </select></label
+            >
+          </form>
+          <div v-else-if="dialogMode === 'status'">
+            <p>
+              {{ selectedUser?.name }}さんを{{
+                selectedUser?.status === 'ACTIVE' ? '利用停止' : '再有効化'
+              }}しますか？
+            </p>
+            <p
+              v-if="selectedUser?.status === 'ACTIVE'"
+              class="mt-2 text-sm text-[#8d2f2b]"
+            >
+              利用停止すると、すべての端末で操作できなくなり、再有効化するまでログインできません。過去の記録は削除されません。
+            </p>
+          </div>
+          <div v-else-if="dialogMode === 'reissue'">
+            <p>{{ selectedUser?.name }}さんの仮パスワードを再発行しますか？</p>
+            <p class="mt-2 text-sm text-[#8d2f2b]">
+              現在のパスワードではログインできなくなり、すべての端末からログアウトされます。
+            </p>
+          </div>
+          <div v-else-if="dialogMode === 'password'">
+            <p class="text-sm">仮パスワード</p>
+            <div class="mt-2 flex flex-col gap-2 min-[480px]:flex-row">
+              <code
+                class="min-w-0 flex-1 select-all whitespace-pre-wrap break-all rounded-xl bg-[#e8eee9] p-3 text-base font-bold"
+                >{{ temporaryPassword }}</code
+              ><button
+                class="min-h-11 rounded-xl border px-4 font-bold"
+                type="button"
+                @click="copyPassword"
+              >
+                コピー
+              </button>
+            </div>
+            <p
+              v-if="passwordCopied"
+              class="mt-2 text-sm text-[#074d47]"
+              role="status"
+            >
+              コピーしました。
+            </p>
+            <p class="mt-4 text-sm font-bold text-[#8d2f2b]">
+              この画面を閉じると再表示できません。安全な方法で本人へ伝えてください。
+            </p>
+          </div>
+        </div>
+
+        <!-- フッターは本文の兄弟にして、safe areaを含めても入力欄へ重ならない構造にする。 -->
+        <footer
+          class="app-dialog-actions app-dialog-footer shrink-0 border-t border-[#cfdbd5] bg-white px-6 pt-4"
+        >
+          <template v-if="dialogMode === 'create' || dialogMode === 'edit'">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -509,25 +596,13 @@ function messageFor(error: unknown): string {
             ><button
               class="min-h-11 rounded-xl bg-[#e87934] px-5 font-bold text-white"
               type="submit"
+              form="user-dialog-form"
               :disabled="isSaving"
             >
               {{ isSaving ? '保存中…' : '保存' }}
             </button>
-          </div>
-        </form>
-        <div v-else-if="dialogMode === 'status'" class="mt-5">
-          <p>
-            {{ selectedUser?.name }}さんを{{
-              selectedUser?.status === 'ACTIVE' ? '利用停止' : '再有効化'
-            }}しますか？
-          </p>
-          <p
-            v-if="selectedUser?.status === 'ACTIVE'"
-            class="mt-2 text-sm text-[#8d2f2b]"
-          >
-            利用停止すると、すべての端末で操作できなくなり、再有効化するまでログインできません。過去の記録は削除されません。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+          </template>
+          <template v-else-if="dialogMode === 'status'">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -546,14 +621,8 @@ function messageFor(error: unknown): string {
                   : '再有効化する'
               }}
             </button>
-          </div>
-        </div>
-        <div v-else-if="dialogMode === 'reissue'" class="mt-5">
-          <p>{{ selectedUser?.name }}さんの仮パスワードを再発行しますか？</p>
-          <p class="mt-2 text-sm text-[#8d2f2b]">
-            現在のパスワードではログインできなくなり、すべての端末からログアウトされます。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+          </template>
+          <template v-else-if="dialogMode === 'reissue'">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -568,33 +637,8 @@ function messageFor(error: unknown): string {
             >
               再発行する
             </button>
-          </div>
-        </div>
-        <div v-else-if="dialogMode === 'password'" class="mt-5">
-          <p class="text-sm">仮パスワード</p>
-          <div class="mt-2 flex gap-2">
-            <code
-              class="min-w-0 flex-1 select-all overflow-x-auto rounded-xl bg-[#e8eee9] p-3 text-base font-bold"
-              >{{ temporaryPassword }}</code
-            ><button
-              class="min-h-11 rounded-xl border px-4 font-bold"
-              type="button"
-              @click="copyPassword"
-            >
-              コピー
-            </button>
-          </div>
-          <p
-            v-if="passwordCopied"
-            class="mt-2 text-sm text-[#074d47]"
-            role="status"
-          >
-            コピーしました。
-          </p>
-          <p class="mt-4 text-sm font-bold text-[#8d2f2b]">
-            この画面を閉じると再表示できません。安全な方法で本人へ伝えてください。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+          </template>
+          <template v-else-if="dialogMode === 'password'">
             <button
               class="min-h-11 rounded-xl bg-[#102a2e] px-5 font-bold text-white"
               type="button"
@@ -602,8 +646,8 @@ function messageFor(error: unknown): string {
             >
               閉じる
             </button>
-          </div>
-        </div>
+          </template>
+        </footer>
       </div>
     </dialog>
   </section>

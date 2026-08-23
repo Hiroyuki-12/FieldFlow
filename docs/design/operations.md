@@ -9,11 +9,11 @@ NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環�
   "timestamp": "2026-07-21T01:30:00.000Z",
   "level": "info",
   "service": "fieldflow-backend",
-  "environment": "prod",
+  "environment": "production",
   "requestId": "550e8400-e29b-41d4-a716-446655440000",
   "event": "http_request_completed",
   "method": "PATCH",
-  "path": "/api/v1/daily-checklists/:date/items/:itemId",
+  "path": "/api/v1/daily-checklists/:date/periods/:period/items/:itemId",
   "statusCode": 200,
   "durationMs": 42,
   "userId": "uuid"

@@ -13,6 +13,7 @@
 erDiagram
     USERS ||--o{ REFRESH_SESSIONS : owns
     USERS ||--o{ DAILY_CHECKLISTS : creates
+    USERS ||--o{ DAILY_CHECKLISTS : cancels
     CATEGORIES ||--o{ TOOLS : classifies
     DAILY_CHECKLISTS ||--|{ DAILY_CHECKLIST_PERIODS : divides
     DAILY_CHECKLIST_PERIODS ||--|{ DAILY_CHECKLIST_PERIOD_CATEGORIES : selects
@@ -69,9 +70,14 @@ erDiagram
     }
     DAILY_CHECKLISTS {
       char36 id PK
-      date work_date UK
+      date work_date
       enum schedule_mode
+      enum status
+      date active_work_date UK
       char36 created_by_user_id FK
+      char36 cancelled_by_user_id FK
+      datetime cancelled_at
+      int version
       datetime created_at
       datetime updated_at
     }

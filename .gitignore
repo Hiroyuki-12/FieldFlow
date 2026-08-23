@@ -23,6 +23,8 @@ e2e/playwright-report/
 perf/results/
 
 # Cloudflare Workersのローカル状態と実Secret。example以外はGitへ含めない。
+# リポジトリルートでWranglerを実行した場合のアカウントキャッシュも除外する。
+/.wrangler/
 cloudflare/.wrangler/
 cloudflare/.wrangler-dist/
 cloudflare/.dev.vars

@@ -15,13 +15,13 @@ flowchart LR
     PR --> B["Backend<br/>lint/typecheck/unit/integration/build"]
     PR --> C["Cloudflare<br/>typecheck/test/dry-run"]
     PR --> E["E2E<br/>MySQL+NestJS+Vue+Playwright"]
-    PR --> T["Terraform<br/>fmt-check/validate"]
     F --> G[Required checks]
     B --> G
     C --> G
     E --> G
-    T --> G
 ```
+
+現行の`.github/workflows/ci.yml`は上記4 jobを実行する。Terraform jobは`infra/`を追加するロードマップ17で導入し、`fmt -check`と`validate`に成功した場合だけRequired checkへ加える。
 
 ### Frontend job
 
@@ -42,7 +42,7 @@ flowchart LR
 6. `npm run build`
 7. `backend/dist`をArtifactとして7日間保存
 
-CI基盤の初期段階では、Health APIのHTTP経路をDB mockと組み合わせた軽量な結合テストを実行する。業務Entity、Migration、Seedの追加後は、Testcontainers MySQL 8.4を用いたDB結合テストを同じコマンドへ追加する。
+現行CIでは、Service・Guard等の単体テストに加え、Testcontainers MySQL 8.4を用いてController、Service、TypeORM、Migration、DB制約を通す結合テストを同じjobで実行する。
 
 ### Cloudflare job
 
@@ -69,6 +69,8 @@ MySQL 8.4を3306で起動し、通常環境と分離した`fieldflow_e2e` DBへM
 k6性能試験は通常PRのRequired checkへ含めず、リリース候補、性能に関わる変更、利用者の指定時に`workflow_dispatch`から実行する。使い捨てMySQL 8.4の`fieldflow_perf`へMigrationと専用Seedを適用し、buildしたNestJSを8080へ起動する。`smoke`、`checklist`、`master`、`all`を選択でき、p95・想定外エラー率のthreshold違反をWorkflow失敗として扱う。summary JSONは7日間、失敗時Backendログは7日間Artifactへ保存し、架空認証情報以外を使用しない。
 
 ## 3. CD
+
+現時点ではGitHub Actionsによる自動CDは未実装である。Cloudflare公開環境は承認後に手動でMigration、Render deploy、Wrangler deployを行っており、以下は再現可能な手動手順と今後自動化する際の目標フローを示す。AWS課題環境のCDはロードマップ17の対象である。
 
 ### 3.1 Cloudflare公開環境
 
@@ -114,6 +116,7 @@ flowchart TD
 
 ## 4. Terraform
 
+- 現在は`infra/`とTerraform用Workflowが未実装であり、以下はロードマップ17で導入する方針とする。
 - PRで`terraform fmt -check`と`terraform validate`を行う。
 - `plan`はAWS認証が利用できる安全なイベントで生成し、秘密値をartifactへ含めない。
 - `apply`と`destroy`は自動実行せず、差分・影響・復旧方法を説明してユーザー承認後に行う。

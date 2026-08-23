@@ -5,6 +5,7 @@ import { json, urlencoded } from 'express';
 import helmet from 'helmet';
 
 import { requestIdMiddleware } from './common/logging/request-id.middleware';
+import { createIngressProxyMiddleware } from './common/security/ingress-proxy.middleware';
 
 const REQUEST_BODY_SIZE_LIMIT = '100kb';
 
@@ -30,6 +31,13 @@ export function configureApp(app: INestApplication): void {
   app.setGlobalPrefix('api');
   // Parserより先にrequestIdを確定し、大きすぎるBodyや壊れたJSONのエラーも追跡できるようにする。
   app.use(requestIdMiddleware);
+  const ingressProxySecret = configService.get<string>(
+    'INGRESS_PROXY_SECRET',
+  );
+  if (ingressProxySecret) {
+    // Render公開URLの直接利用を防ぎ、通常の画面・APIをCloudflareの同一Originへ集約する。
+    app.use(createIngressProxyMiddleware(ingressProxySecret));
+  }
   // 開発用Swaggerのinline scriptを妨げるCSPとHTTP環境に不要なHSTSだけ非本番で外す。
   app.use(
     helmet({

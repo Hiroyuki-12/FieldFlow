@@ -9,7 +9,7 @@
 3. 管理者と作業者には、どのような権限差がありますか。
 4. Access TokenとRefresh Tokenを分ける理由と、それぞれをどこに保持するか説明してください。
 5. Vue、NestJS、TypeORM、MySQLはそれぞれどの役割を担当しますか。
-6. Cloudflare Worker、Static Assets、Container、Aivenはどの順番でつながり、何を担当しますか。
+6. Cloudflare Worker、Static Assets、Render、Aivenはどの順番でつながり、何を担当しますか。Renderのcold start中にFrontendはどう動きますか。
 7. CloudFront、S3、ALB、ECS Fargate、RDSはどの順番でつながり、何を担当しますか。
 8. Cloudflare公開環境とAWS課題提出環境を分ける理由を、費用・公開目的・学習目的から説明してください。
 9. 楽観ロックが必要な理由と、競合時の画面動作を説明してください。

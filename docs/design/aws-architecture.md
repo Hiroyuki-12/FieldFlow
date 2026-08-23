@@ -4,7 +4,7 @@
 
 AIエンジニアコース中級編の課題提出と実務構成検証を目的に、RaiseTimeLineと同じ、EC2を管理しない学習用構成を採用する。フロントとAPIを1つのCloudFront URLへ集約し、ローカル・CI・AWS課題提出環境で同じコンテナとMySQLメジャーバージョンを使う。
 
-コンテスト・転職用ポートフォリオの長期公開は[Cloudflare・Aiven公開構成](cloudflare-architecture.md)が担当する。ALB、ECS Fargate、RDSは低アクセスでも固定的な稼働費用が発生するため、AWS環境は課題レビューと検証に必要な期間を確認して構築し、終了後はユーザー承認のもと停止・削除する。Terraformコード、plan、構成図、ログ、テスト結果を残し、必要時に再構築できる状態を成果とする。
+コンテスト・転職用ポートフォリオの長期公開は[Cloudflare・Render・Aiven公開構成](cloudflare-architecture.md)が担当する。ALB、ECS Fargate、RDSは低アクセスでも固定的な稼働費用が発生するため、AWS環境は課題レビューと検証に必要な期間を確認して構築し、終了後はユーザー承認のもと停止・削除する。Terraformコード、plan、構成図、ログ、テスト結果を残し、必要時に再構築できる状態を成果とする。
 
 ## 2. 全体構成
 

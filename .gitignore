@@ -22,6 +22,11 @@ e2e/playwright-report/
 # k6 generated files
 perf/results/
 
+# Cloudflare Workersのローカル状態と実Secret。example以外はGitへ含めない。
+cloudflare/.wrangler/
+cloudflare/.wrangler-dist/
+cloudflare/.dev.vars
+
 # Terraform (infra/)
 # .terraform/ is provider cache and can be regenerated.
 # *.tfstate* and *.tfvars may contain secrets, so keep them out of git.

@@ -3,6 +3,7 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 
 import { DATABASE_ENTITIES } from './entities';
 import { DATABASE_MIGRATIONS } from './migrations';
+import { createDatabaseConnectionOptions } from './database-connection-options';
 
 /**
  * NestJSの通常起動時に使用するTypeORM接続設定を作る。
@@ -25,6 +26,14 @@ export function createTypeOrmOptions(
     timezone: 'Z',
     entities: DATABASE_ENTITIES,
     migrations: DATABASE_MIGRATIONS,
+    ...createDatabaseConnectionOptions({
+      poolLimit: configService.getOrThrow<number>('DB_POOL_LIMIT'),
+      connectTimeoutMs: configService.getOrThrow<number>(
+        'DB_CONNECT_TIMEOUT_MS',
+      ),
+      tlsEnabled: configService.getOrThrow<boolean>('DB_TLS_ENABLED'),
+      tlsCaBase64: configService.get<string>('DB_TLS_CA_BASE64'),
+    }),
     // EntityはTypeScriptとDBの対応表として使い、Entityとの差分をDBへ自動反映させない。
     // 自動反映を許すと、名前変更を列削除＋再作成と判断してデータを失う可能性があるため、
     // スキーマ変更は内容をレビューできるMigrationだけに限定する。

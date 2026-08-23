@@ -63,6 +63,16 @@ nav a[aria-current="page"] {
   background: #d8eee8;
 }
 
+.backend-startup-spinner {
+  animation: backend-startup-spin 1s linear infinite;
+}
+
+@keyframes backend-startup-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .app-notice {
   display: flex;
   align-items: flex-start;
@@ -159,5 +169,10 @@ nav a[aria-current="page"] {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .backend-startup-spinner {
+    animation: none;
+    border-color: #047857;
   }
 }

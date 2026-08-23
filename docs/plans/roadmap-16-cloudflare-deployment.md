@@ -1,113 +1,123 @@
-# ロードマップ16 Cloudflare・Aiven公開環境 実装計画
+# ロードマップ16 Cloudflare・Render・Aiven公開環境 実装計画
 
 ## 1. 目的
 
-コンテスト審査と転職用ポートフォリオでFieldFlowを長期公開できるよう、VueとNestJSをCloudflareへ、MySQL 8.4をAivenへデプロイする。AWS課題提出環境とは分離し、低アクセス時の継続費用を抑えながら、公開URLからログインと主要業務操作を確認できる状態を作る。
+コンテスト審査と転職用ポートフォリオでFieldFlowを長期公開できるよう、VueをWorkers Static Assets、API入口をWorkers Free、NestJSをRender Free Web Service、MySQL 8.4をAiven Freeへ配置する。AWS課題提出環境とは分離し、無料枠を活用しながらCloudflareの単一公開URLからLoginと主要業務操作を確認できる状態を作る。
 
-本計画の設計整理はIssue [#39](https://github.com/Hiroyuki-12/FieldFlow/issues/39)で行う。Cloudflare・Aivenの実装と外部リソース作成は、#39のマージ後に別Issueを起票して実施する。
+設計整理はIssue [#39](https://github.com/Hiroyuki-12/FieldFlow/issues/39)、実装と外部リソース作成はIssue [#41](https://github.com/Hiroyuki-12/FieldFlow/issues/41)で管理する。当初予定したCloudflare Containersは採用せず、Workers Paidも契約しない。
 
 ## 2. 前提
 
-- ロードマップ1〜15のアプリケーション、CI、E2E、性能試験が完了している。
-- CloudflareとAivenのアカウントを用意する。
-- Cloudflare Containersの有効化や課金開始、Aivenサービス作成は、料金と影響を説明してユーザー承認後に行う。2026年8月時点でContainersには月額5 USDのWorkers Paidプランが必要である。
-- 公開前にCloudflare・Aivenの最新料金、無料枠、制限、対応リージョンを公式資料で再確認する。
-- Aiven無料枠はSLA対象外で、継続利用がない場合は通知後に停止される可能性がある。コンテスト審査期間は毎日稼働と通知を確認し、停止時に手動再開できるようにする。
+- ロードマップ1〜15のApplication、CI、E2E、性能試験が完了している。
+- Cloudflare、Render、Aivenのaccountを用意する。
+- Aiven MySQL 8.4 Free service `fieldflow-mysql`は作成済みである。
+- Render service作成、Secrets登録、Migration／Seed、deployは、対象・費用・影響を説明して承認後に行う。
+- 料金、無料枠、region、limitは実行日に公式資料で再確認する。
+- AivenとRender FreeはSLA対象外で、停止やcold startがある前提で画面と運用を設計する。
 
 ## 3. 実装範囲
 
-### Backend
+### Backend / Render
 
-- Node.js 24・NestJS用のマルチステージDockerfileと`.dockerignore`
-- 非root実行、port `8080`、health確認
-- Aiven MySQL 8.4へ接続するTLS設定と環境変数検証
-- 接続pool上限とtimeout
-- Containerの外向き通信をAiven hostへ限定し、MySQL TCP接続を確認
-- Cloudflare Proxy経路に合わせた送信元IPと`TRUST_PROXY_HOPS`の確認
-- Cloudflare向け設定の単体・結合テスト
+- Node.js 24・NestJS用multi-stage Dockerfileと`.dockerignore`
+- 非root実行、Render動的`PORT`、`/api/health`
+- Aiven MySQL 8.4のTLS証明書検証、pool上限、connect timeout
+- `render.yaml`: Docker、Free、Singapore、health、auto deploy無効
+- Cloudflare Workerだけを業務API入口にするproxy共有鍵Middleware
+- Worker→Render Proxy経路に合わせた送信元IPと`TRUST_PROXY_HOPS`
+- Render SecretsへDB、TLS CA、JWT、CORS、proxy共有鍵を登録する手順
 
 ### Cloudflare
 
-- Wrangler設定とCloudflare用Worker
-- Vue `dist`のWorkers Static Assets配信
-- `/api/*`から単一Backend Containerへのルーティング
-- SPA fallback
-- Containerの最大Instance数、Instance type、スリープ時間、CPU上限
-- Cloudflare SecretsからContainerへの秘密値注入
-- Worker・Containerログと公開health確認
+- Wrangler設定とWorkers Free用Worker
+- Vue `dist`のWorkers Static Assets配信とSPA fallback
+- `/api`と`/api/*`だけをRenderへproxy
+- path、query、method、body、Refresh Cookie responseの透過
+- 利用者入力のProxy Headerと内部共有鍵を削除して安全な値へ置換
+- Renderの502／503／504と接続例外を`503 BACKEND_STARTING`へ統一
+- Cloudflare SecretでWorker→Render共有鍵を保持
 
-### Aiven・データ
+### Frontend
 
-- Aiven for MySQL 8.4サービス
-- 無料枠の1 GB disk・最大76接続に収まるデータ量とpool設定
-- TLS証明書検証
+- 最初の画面表示前に`GET /api/health`でBackend readinessを確認
+- health requestは4秒でtimeoutし、3秒→5秒→8秒→最大10秒間隔で自動再試行
+- cold start中の理由、約1分の目安、自動再試行状況をaccessibleな画面で表示
+- API操作中にWorkerから`BACKEND_STARTING`を受けた場合も起動待ち画面へ戻す
+- Backend ready後にRefresh CookieでSessionを復元し、Router Guardを進める
+
+### Aiven・data
+
+- 作成済みAiven MySQL 8.4 Freeを使用
+- 1 GB disk・最大76接続に収まるdata量とpool設定
 - TypeORM Migrationの一回限り実行
-- 初期管理者と`共通`カテゴリのSeed
-- バックアップ、接続数、ストレージ、休止通知の確認
-- 公開デモデータの保護または復旧手順
+- 初期管理者と`共通`categoryのSeed
+- backup、接続数、storage、停止通知の確認
 
-### ドキュメント・公開確認
+### Document・公開確認
 
-- READMEへ公開URL、デモアカウント、コールドスタート注意事項を追記
-- デプロイ・rollback・秘密値更新・障害調査手順
-- 実URLでの主要Playwrightスモーク確認
-- 公開環境へ負荷をかけない単発のAPI応答確認
-- コンテスト用デモ動画とスクリーンショット
+- READMEへ構成、無料枠、cold start表示を追記
+- Cloudflare・Render・Aivenのarchitecture図とrequest sequence
+- service作成、Secrets、Migration、deploy、rollback、障害調査手順
+- 実URLでLogin、Refresh、管理、日別表をsmoke確認
+- 公開環境へ負荷をかけない単発のAPI確認
 
 ## 4. 対象外
 
+- Cloudflare Containers、Durable Objects、Workers Paid
 - Cloudflare D1への移行
-- AWS、Terraform、ECS Fargate、RDSの実装（ロードマップ17）
-- Cloudflare Containerの複数Instance化
+- AWS、Terraform、ECS Fargate、RDS（ロードマップ17）
+- Render paid instance、複数instance、persistent disk
 - 公開環境へのk6性能試験
-- 独自ドメイン、メール通知、MFA
+- 独自domain、email通知、MFA
 
 ## 5. 実装順序
 
-1. DockerfileとAiven TLS設定を実装し、ローカルContainerから接続確認する。
-2. WorkerとStatic AssetsをローカルWrangler環境で確認する。
-3. Cloudflare Containerへhealthリクエストを通す。
-4. AivenへMigrationとSeedを一回だけ適用する。
-5. Cloudflare Secretsを登録し、公開環境へデプロイする。
-6. 公開URLでログイン、Refresh、管理、日別表作成・更新を確認する。
-7. ログ、Aivenバックアップ、課金上限、コールドスタートを確認する。
-8. README、運用手順、デモ動画を仕上げる。
+1. Dockerfile、Aiven TLS、Render動的portとproxy共有鍵検証を実装する。
+2. Worker、Static Assets、Render proxy、起動中503をlocal Wranglerで確認する。
+3. Frontendの起動待ち画面とhealth自動再試行を実装する。
+4. `render.yaml`、CI、README、設計図、運用手順を更新する。
+5. AivenへMigrationとSeedを一回だけ適用する。
+6. Render Free Web ServiceとSecretsを作成・登録し、Backendをdeployする。
+7. Cloudflare Secretを登録し、WorkerとStatic Assetsをdeployする。
+8. 公開URLでcold start、Login、Refresh、管理、日別表作成・更新を確認する。
 
-Migration失敗時はContainerを新バージョンへ更新しない。Frontend公開後にAPIだけ失敗する時間を避けるため、Backend healthと主要APIを確認してからFrontendを最終更新する。
+Migration失敗時はRenderをdeployしない。Render healthを確認してからCloudflareの公開先を最終更新し、Frontendだけ表示されAPIが利用不能な時間を短くする。
 
 ## 6. テスト方針
 
-- Docker imageのbuildと非root起動
-- Backendのtypecheck、lint、単体、結合、build
-- Frontendのtypecheck、lint、テスト、build
-- Workerの型チェックとルーティングテスト
-- Aiven TLSの成功と、証明書不正・不足時の安全な起動失敗
-- Aiven以外への不要な外向き通信が許可されていないこと
-- 公開URLのhealth、Cookie属性、Origin検証、Refreshローテーション
-- 公開デモ利用者による主要画面のPlaywrightスモーク
-- Container再起動後もAivenのデータが残ること
+- Backend imageのbuild、非root起動、Render動的port
+- Backendのtypecheck、lint、unit、integration、build
+- proxy共有鍵の一致、未指定拒否、health例外
+- Frontendのtypecheck、lint、unit／component test、build
+- health初回成功、cold start失敗、自動再試行、同時Loop集約
+- Workerのpath境界、Render URL変換、Header偽装防止、共有鍵、起動中503、Cookie透過
+- Wrangler deploy dry-run（Worker bundleとVue Assets。Backend imageはRender側で検証）
+- Aiven TLS成功と、CA不足・不正時の安全な起動失敗
+- 公開URLのhealth、Cookie属性、Origin検証、Refresh rotation
+- cold start後もAiven dataが保持されること
 
-公開環境では破壊的Seed、TRUNCATE、k6を実行しない。テストデータを初期化する場合は、対象をデモ用識別子へ限定し、影響を確認してから実行する。
+公開環境では破壊的Seed、`TRUNCATE`、k6を実行しない。変更系smoke dataはdemo用識別子へ限定する。
 
 ## 7. 完了条件
 
-- Cloudflareの公開URLからVueが表示される。
-- 同一オリジンの`/api/*`でNestJSへ到達できる。
-- ログイン、Refresh、管理画面、日別表の作成・更新が成功する。
-- Containerのスリープ・再起動後もAivenのデータが保持される。
-- DBパスワード、JWT鍵、TLS関連値がGit、image、ログへ含まれない。
-- Migration成功後だけ新しいBackendを公開する手順が確認できる。
-- コールドスタート、無料枠制限、デモデータ変更時の注意がREADMEに記載される。
-- Workers Paidの基本料金と追加課金の可能性、Aiven停止時の再開手順が記録される。
-- 主要品質チェックと公開スモーク確認が成功する。
+- Cloudflare公開URLからVueが表示される。
+- 同一Originの`/api/*`がWorker経由でRender NestJSへ到達する。
+- Render URLへ共有鍵なしで業務APIを直接呼ぶと`403`になる。
+- Render cold start中に起動待ち画面が表示され、healthを自動再試行して通常画面へ進む。
+- Login、Refresh、管理画面、日別表の作成・更新が成功する。
+- Render停止・再起動後もAiven dataが保持される。
+- DB password、JWT鍵、TLS CA、proxy共有鍵がGit、image、chat、logへ含まれない。
+- Migration成功後だけBackendを更新する手順が確認できる。
+- Cloudflare・Render・Aivenの無料枠と停止条件がREADME／運用手順に記載される。
+- 主要品質checkと公開smoke確認が成功する。
 
 ## 8. 理解チェック
 
-実装前後に次を自分の言葉で説明する。
+実装と動作確認後に次を自分の言葉で説明する。
 
-1. Worker、Static Assets、Container、Aivenはそれぞれ何を担当するか。
-2. MySQLをContainer内へ保存できない理由は何か。
-3. Cloudflare SecretsとAiven TLSは何の事故を防ぐか。
-4. MigrationをContainer起動から分離する理由は何か。
-5. URLを公開したままContainerをスリープさせる利点と欠点は何か。
-6. Cloudflare公開環境とAWS課題提出環境を分ける理由は何か。
+1. Static Assets、Worker、Render、Aivenはそれぞれ何を担当するか。
+2. Workerを公開OriginにするとRefresh Cookieを同一Originで維持できる理由は何か。
+3. Render URLが公開されていてもproxy共有鍵を要求する理由は何か。
+4. Render cold start中にhealthだけを自動再試行し、業務POSTを無条件再送しない理由は何か。
+5. MigrationをRender起動から分離する理由は何か。
+6. Cloudflare・Render・Aiven公開環境とAWS課題提出環境を分ける理由は何か。

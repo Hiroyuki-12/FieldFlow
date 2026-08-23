@@ -8,10 +8,10 @@ FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーショ�
 
 | 環境 | 目的 | 構成 | 状態 |
 | --- | --- | --- | --- |
-| Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Worker + Containers + Aiven for MySQL 8.4 | ロードマップ16で実装予定 |
+| Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Workers Free + Render Free + Aiven MySQL 8.4 | ロードマップ16を実装中（Aiven作成済み・未デプロイ） |
 | AWS課題提出環境 | AIエンジニアコース中級編の課題提出・実務構成検証 | S3 + CloudFront + ALB + ECS Fargate + RDS MySQL 8.4 + Terraform | ロードマップ17で実装予定 |
 
-Cloudflare環境は低アクセス時にBackend Containerをスリープさせ、公開URLを維持しながら継続費用を抑えます。ただし、Cloudflare ContainersにはWorkers Paidプランが必要で、2026年8月時点の基本料金は月額5 USDです。Aiven MySQLは無料枠から開始し、利用量と休止通知を確認します。AWS環境は学習・課題レビューに必要な期間構築し、終了後は費用と公開要否を確認して停止・削除します。設計理由と環境ごとの差は[デプロイ環境の使い分け](docs/design/deployment-strategy.md)を参照してください。
+Cloudflareを画面とAPIの単一公開Originにし、`/api/*`だけをRender FreeのNestJSへproxyします。Renderは15分間アクセスがないと停止し、再起動に約1分かかる場合があるため、その間はVueが起動待ち画面を表示してhealthを自動再試行します。Workers Static Assets、Workers Free、Render Free、Aiven MySQL Freeから開始し、各無料枠と停止通知を確認します。AWS環境は学習・課題レビューに必要な期間だけ別途構築します。詳細は[Cloudflare・Render・Aiven公開構成](docs/design/cloudflare-architecture.md)を参照してください。
 
 公開URLとデモアカウントは、ロードマップ16のデプロイと安全確認が完了してから追記します。実際の秘密値や管理用認証情報はREADMEへ記載しません。
 
@@ -34,6 +34,9 @@ cd backend
 npm ci
 
 cd ../frontend
+npm ci
+
+cd ../cloudflare
 npm ci
 ```
 
@@ -98,6 +101,11 @@ npm run typecheck
 k6 inspect scenarios/smoke.ts
 k6 inspect scenarios/checklist.ts
 k6 inspect scenarios/master.ts
+
+cd ../cloudflare
+npm run typecheck
+npm test
+npm run check:deploy
 ```
 
 ### Playwright E2E
@@ -159,10 +167,11 @@ Smokeは1 VU・1分、日別表と道具一覧は最大20 VU・3分で、p95 500
 
 ## CI
 
-`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backend・Playwright E2Eの品質チェックを独立したjobで並列実行します。k6は長時間負荷を通常PRへ加えず、専用Workflowを手動実行します。
+`main`向けのPull Requestと`main`へのpushでは、GitHub ActionsがFrontend・Backend・Cloudflare・Playwright E2Eの品質チェックを独立したjobで並列実行します。k6は長時間負荷を通常PRへ加えず、専用Workflowを手動実行します。
 
 - Frontend: lint、型チェック、単体・コンポーネントテスト、build
 - Backend: lint、型チェック、単体テスト、結合テスト、build
+- Cloudflare: Vue build、Worker型チェック・Render proxy routingテスト、Wrangler dry-run
 - E2E: 専用MySQLへのMigration・Seed、NestJS・Vue起動、Chromium主要シナリオ
 - Performance（手動）: 専用MySQLへのMigration・Seed、k6 smoke・日別表・道具一覧
 - Node.jsは`.node-version`、依存パッケージは各`package-lock.json`に従って再現します。
@@ -170,6 +179,8 @@ Smokeは1 VU・1分、日別表と道具一覧は最大20 VU・3分で、p95 500
 - E2E失敗時だけPlaywrightの証跡とBackendログをArtifactとして7日間保存します。
 
 CIでのみ問題が起きることを避けるため、push前にも上記の品質チェックをローカルで実行します。GitHub Actionsに秘密値を追加する場合は後続Issueで用途と権限を確認し、トークンやパスワードをログやArtifactへ含めません。
+
+Cloudflare公開環境のRender作成、Secrets、Migration、デプロイ、rollbackは[Cloudflare・Render・Aiven運用手順](docs/operations/cloudflare-deployment.md)を参照してください。外部サービスを変更する操作は、対象と費用を確認してから実行します。
 
 ## DB運用
 

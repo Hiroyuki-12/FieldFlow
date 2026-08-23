@@ -111,6 +111,7 @@ const groupedItems = computed(() => {
       items,
       prepared,
       selectedCount: selected.length,
+      isQuantityUnset: selected.length === 0,
       progress,
       hasSaveFailure,
       hasConflict,
@@ -129,6 +130,41 @@ const progressPercent = computed(() =>
     ? 0
     : Math.round((preparedCount.value / selectedItems.value.length) * 100),
 );
+// カテゴリ見出しと上部サマリーを同じ集計結果から作り、未設定を残したまま100%と誤認する事故を防ぐ。
+// 共通カテゴリは道具が実際にスナップショットされている場合だけgroupedItemsへ現れるため、空の共通カテゴリは数えない。
+const quantityUnsetCategories = computed(() =>
+  groupedItems.value.filter((group) => group.isQuantityUnset),
+);
+const quantityUnsetCategoryCount = computed(
+  () => quantityUnsetCategories.value.length,
+);
+const isPreparationComplete = computed(
+  () =>
+    selectedItems.value.length > 0 &&
+    preparedCount.value === selectedItems.value.length &&
+    quantityUnsetCategoryCount.value === 0,
+);
+const preparationStatus = computed(() => {
+  if (
+    selectedItems.value.length === 0 ||
+    quantityUnsetCategoryCount.value > 0
+  ) {
+    return {
+      icon: '⚠',
+      label: '確認が必要',
+      tone: 'warning' as const,
+    };
+  }
+  if (isPreparationComplete.value) {
+    return { icon: '✓', label: '準備完了', tone: 'complete' as const };
+  }
+  return { icon: '…', label: '準備中', tone: 'progress' as const };
+});
+const progressAriaText = computed(() => {
+  const preparation = `持ち出し対象の準備 ${preparedCount.value} / ${selectedItems.value.length}`;
+  const unset = `数量未設定 ${quantityUnsetCategoryCount.value}カテゴリ`;
+  return `${preparation}、${unset}、${preparationStatus.value.label}`;
+});
 const hasPendingItemSaves = computed(() =>
   Object.values(itemSaveStates.value).some(
     (state) =>
@@ -782,26 +818,61 @@ function deleteMessageFor(error: unknown): string {
 
       <section
         class="mt-6 rounded-2xl bg-[#102a2e] p-5 text-white sm:p-6"
-        aria-label="準備の進捗"
+        aria-labelledby="preparation-progress-title"
+        aria-live="polite"
       >
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p class="text-sm font-bold text-[#b8d9d3]">
               {{ periodLabel(currentPeriod.period) }}
             </p>
-            <p class="mt-1 text-xl font-black">
-              {{
-                selectedItems.length === 0
-                  ? '持ち出し未設定'
-                  : `準備 ${preparedCount} / ${selectedItems.length}`
-              }}
+            <h2
+              id="preparation-progress-title"
+              class="mt-1 text-2xl font-black"
+            >
+              <span aria-hidden="true">{{ preparationStatus.icon }}</span>
+              {{ preparationStatus.label }}
+            </h2>
+            <p class="mt-2 text-sm font-bold text-[#dcece8] sm:text-base">
+              持ち出し対象の準備
+              <strong class="whitespace-nowrap text-white">
+                {{ preparedCount }} / {{ selectedItems.length }}
+              </strong>
+            </p>
+            <p
+              class="mt-1 text-sm font-bold"
+              :class="
+                quantityUnsetCategoryCount > 0
+                  ? 'text-[#ffd4a8]'
+                  : 'text-[#b8d9d3]'
+              "
+            >
+              数量未設定
+              <strong class="whitespace-nowrap">
+                {{ quantityUnsetCategoryCount }}カテゴリ
+              </strong>
             </p>
           </div>
-          <strong class="text-2xl">{{ progressPercent }}%</strong>
+          <strong v-if="selectedItems.length > 0" class="text-lg sm:text-xl">
+            持ち出し対象内 {{ progressPercent }}%
+          </strong>
         </div>
-        <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
+        <div
+          v-if="selectedItems.length > 0"
+          class="mt-4 h-2 overflow-hidden rounded-full bg-white/20"
+          role="progressbar"
+          :aria-valuenow="preparedCount"
+          aria-valuemin="0"
+          :aria-valuemax="selectedItems.length"
+          :aria-valuetext="progressAriaText"
+        >
           <div
-            class="h-full rounded-full bg-[#6fd2b3]"
+            class="h-full rounded-full"
+            :class="
+              preparationStatus.tone === 'warning'
+                ? 'bg-[#f4ad68]'
+                : 'bg-[#6fd2b3]'
+            "
             :style="{ width: `${progressPercent}%` }"
           ></div>
         </div>
@@ -812,7 +883,7 @@ function deleteMessageFor(error: unknown): string {
           <span
             v-for="category in currentPeriod.categories"
             :key="category.sourceCategoryId"
-            class="rounded-full bg-white/10 px-3 py-1 text-sm font-bold"
+            class="max-w-full break-words rounded-2xl bg-white/10 px-3 py-1 text-sm font-bold"
           >
             {{ category.categoryName }}
           </span>
@@ -880,7 +951,7 @@ function deleteMessageFor(error: unknown): string {
                 {{ isCategoryExpanded(group.categoryName) ? '▼' : '▶' }}
               </span>
               <span class="min-w-[7rem] flex-1">
-                <span class="block text-lg font-black">{{
+                <span class="block break-words text-lg font-black">{{
                   group.categoryName
                 }}</span>
                 <span class="text-xs font-bold text-[#49666a]"

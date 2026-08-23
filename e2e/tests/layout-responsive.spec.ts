@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { credentials, loginThroughUi } from "../fixtures/auth.ts";
+import { addDays, todayInTokyo } from "../support/date.ts";
 
 const desktopWidths = [1280, 1440] as const;
 const menuWidths = [768, 1024] as const;
@@ -151,3 +152,41 @@ test("LAYOUT-SM sm未満はユーザー情報をメニュー内に表示し、Es
     await dialog.getByRole("button", { name: "キャンセル" }).click();
   }
 });
+
+for (const width of [320, 390, 1280] as const) {
+  test(`CHECKLIST-DIALOG-${width} 未選択理由と操作ボタンが表示領域に収まる`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width < 500 ? 568 : 900 });
+    await loginThroughUi(page, credentials.worker);
+    await page.goto(`/daily-checklists/${addDays(todayInTokyo(), 3)}`);
+    await page
+      .getByRole("button", { name: "この日のチェック表を作成" })
+      .click();
+
+    const dialog = page.getByRole("dialog", { name: /チェック表を作成/ });
+    const createButton = dialog.getByRole("button", {
+      name: "チェック表を作成",
+    });
+    await expect(dialog).toBeVisible();
+    await expect(createButton).toBeDisabled();
+    await expect(createButton).toHaveCSS("cursor", "not-allowed");
+    await expect(
+      dialog.getByText("作業カテゴリを1つ以上選択すると作成・保存できます。"),
+    ).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+
+    await dialog.getByLabel("E2E 電気工事").check();
+    await expect(createButton).toBeEnabled();
+    await expect(dialog.locator("footer")).toBeVisible();
+  });
+}

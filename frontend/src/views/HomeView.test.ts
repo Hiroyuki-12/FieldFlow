@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { server } from '../test/server';
-import { todayInTokyo } from '../utils/date';
+import { formatJapaneseDate, todayInTokyo } from '../utils/date';
 import { useAuthStore } from '../stores/auth';
 import HomeView from './HomeView.vue';
 
@@ -77,7 +77,14 @@ function dailyChecklist(scheduleMode: 'FULL_DAY' | 'SPLIT' = 'SPLIT') {
   };
 }
 
-async function renderHome() {
+async function renderHome(
+  options: {
+    role?: 'ADMIN' | 'WORKER';
+    name?: string;
+  } = {},
+) {
+  const role = options.role ?? 'WORKER';
+  const name = options.name ?? '山田 太郎';
   const pinia = createPinia();
   setActivePinia(pinia);
   const authStore = useAuthStore(pinia);
@@ -86,9 +93,9 @@ async function renderHome() {
     expiresIn: 900,
     user: {
       id: 'user-1',
-      name: '山田 太郎',
+      name,
       loginId: 'worker.one',
-      role: 'WORKER',
+      role,
       mustChangePassword: false,
     },
   });
@@ -107,7 +114,11 @@ async function renderHome() {
         name: 'categories',
         component: { template: '<p>カテゴリ</p>' },
       },
-      { path: '/users', name: 'users', component: { template: '<p>ユーザー</p>' } },
+      {
+        path: '/users',
+        name: 'users',
+        component: { template: '<p>ユーザー</p>' },
+      },
     ],
   });
   await router.push('/');
@@ -116,7 +127,14 @@ async function renderHome() {
 }
 
 describe('HomeView', () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    server.use(
+      http.get(`*/api/v1/daily-checklists/${today}`, () =>
+        HttpResponse.json(dailyChecklist()),
+      ),
+    );
+  });
 
   it('今日の作成済み時間帯と準備進捗を表示する', async () => {
     server.use(
@@ -128,7 +146,9 @@ describe('HomeView', () => {
     await renderHome();
 
     expect(
-      screen.getByRole('heading', { name: 'おはようございます、山田 太郎さん' }),
+      screen.getByRole('heading', {
+        name: '山田 太郎さん、準備を始めましょう。',
+      }),
     ).toBeInTheDocument();
     expect(await screen.findByText('午前・チェック表あり')).toBeInTheDocument();
     expect(screen.getByText('午後・チェック表あり')).toBeInTheDocument();
@@ -138,12 +158,79 @@ describe('HomeView', () => {
     ).toBeInTheDocument();
   });
 
+  it('作業者へ時間帯に依存しない挨拶と持ち出し準備の説明を表示する', async () => {
+    // 利用時刻によって不自然な朝の挨拶が表示される回帰を防ぐ。
+    await renderHome();
+
+    const heading = screen.getByRole('heading', {
+      name: '山田 太郎さん、準備を始めましょう。',
+    });
+    expect(heading).toHaveAttribute('data-page-heading');
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(screen.queryByText(/おはようございます/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/こんにちは/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/こんばんは/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `${formatJapaneseDate(today)}。今日の持ち出し準備を確認しましょう。`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '管理メニュー' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: '準備の流れ' }),
+    ).toBeInTheDocument();
+  });
+
+  it('管理者へ準備状況と管理情報の説明、管理ショートカットを表示する', async () => {
+    // グローバルナビゲーションとは別の「よく使う機能への近道」だと伝える。
+    await renderHome({ role: 'ADMIN', name: '管理 花子' });
+
+    expect(
+      screen.getByText(
+        `${formatJapaneseDate(today)}。今日の準備状況と管理情報を確認できます。`,
+      ),
+    ).toBeInTheDocument();
+    const adminMenu = screen
+      .getByRole('heading', { name: '管理メニュー' })
+      .closest('section');
+    expect(adminMenu).not.toBeNull();
+    expect(
+      within(adminMenu as HTMLElement).getByText(
+        'よく使う管理機能をすぐに開けます。',
+      ),
+    ).toBeInTheDocument();
+    for (const linkName of ['道具', '作業カテゴリ', 'ユーザー']) {
+      expect(
+        within(adminMenu as HTMLElement).getByRole('link', { name: linkName }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  it('長いユーザー名を文字列として安全に表示し、折り返し可能にする', async () => {
+    // 長い名前による横スクロールと、名前をHTMLとして解釈する脆弱性の回帰を防ぐ。
+    const longName =
+      '非常に長い利用者名でも安全に折り返して表示する作業者<img src=x onerror=alert(1)>';
+    await renderHome({ name: longName });
+
+    const heading = screen.getByRole('heading', {
+      name: `${longName}さん、準備を始めましょう。`,
+    });
+    expect(heading).toHaveClass('break-words');
+    expect(heading.querySelector('img')).not.toBeInTheDocument();
+  });
+
   it('午前・午後の選択を保持し、全時間帯を1回のPUTで作成する', async () => {
     let receivedBody: unknown;
     server.use(
       http.get(`*/api/v1/daily-checklists/${today}`, () =>
         HttpResponse.json(
-          { statusCode: 404, code: 'CHECKLIST_NOT_FOUND', message: 'not found' },
+          {
+            statusCode: 404,
+            code: 'CHECKLIST_NOT_FOUND',
+            message: 'not found',
+          },
           { status: 404 },
         ),
       ),

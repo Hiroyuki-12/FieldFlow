@@ -17,7 +17,7 @@ async function loginAsAdminAtWidth(
 }
 
 for (const width of menuWidths) {
-  test(`LAYOUT-${width} xl未満は右端ハンバーガーへ切り替わる`, async ({
+  test(`LAYOUT-${width} xl未満はFieldFlow直後のハンバーガーへ切り替わる`, async ({
     page,
   }) => {
     await loginAsAdminAtWidth(page, width);
@@ -30,14 +30,21 @@ for (const width of menuWidths) {
     await expect(
       page.getByRole("navigation", { name: "アカウントメニュー" }),
     ).toBeHidden();
-    await expect(
-      page.getByLabel("ログイン中のユーザー"),
-    ).toBeVisible();
+    await expect(page.getByLabel("ログイン中のユーザー")).toBeVisible();
 
-    // 開いた後はアクセシブル名が「メニューを閉じる」に変わるため、位置はクリック前に測る。
+    // ユーザー情報の左ではなく、ブランド直後に置かれることを座標でも固定する。
+    const brandBox = await page
+      .getByRole("link", { name: "FieldFlow" })
+      .boundingBox();
     const menuBox = await menuButton.boundingBox();
+    const userBox = await page.getByLabel("ログイン中のユーザー").boundingBox();
+    expect(brandBox).not.toBeNull();
     expect(menuBox).not.toBeNull();
-    expect(width - (menuBox!.x + menuBox!.width)).toBeLessThanOrEqual(32);
+    expect(userBox).not.toBeNull();
+    expect(menuBox!.x - (brandBox!.x + brandBox!.width)).toBeLessThanOrEqual(
+      24,
+    );
+    expect(userBox!.x).toBeGreaterThan(menuBox!.x + menuBox!.width);
 
     // sm以上ではユーザー情報をヘッダーに残し、メニュー内で重複表示しない。
     await menuButton.click();
@@ -45,9 +52,7 @@ for (const width of menuWidths) {
       name: "モバイルナビゲーション",
     });
     await expect(mobileNavigation).toBeVisible();
-    await expect(
-      page.getByLabel("メニュー内のユーザー情報"),
-    ).toBeHidden();
+    await expect(page.getByLabel("メニュー内のユーザー情報")).toBeHidden();
   });
 }
 
@@ -90,9 +95,7 @@ test("LAYOUT-SM sm未満はユーザー情報をメニュー内に表示し、Es
     name: "モバイルナビゲーション",
   });
   await expect(mobileNavigation).toBeVisible();
-  await expect(
-    page.getByLabel("メニュー内のユーザー情報"),
-  ).toBeVisible();
+  await expect(page.getByLabel("メニュー内のユーザー情報")).toBeVisible();
   await expect(mobileNavigation.getByRole("link").first()).toBeFocused();
 
   await page.keyboard.press("Escape");
@@ -100,6 +103,51 @@ test("LAYOUT-SM sm未満はユーザー情報をメニュー内に表示し、Es
   await expect(menuButton).toBeFocused();
 
   const menuBox = await menuButton.boundingBox();
+  const brandBox = await page
+    .getByRole("link", { name: "FieldFlow" })
+    .boundingBox();
   expect(menuBox).not.toBeNull();
-  expect(375 - (menuBox!.x + menuBox!.width)).toBeLessThanOrEqual(24);
+  expect(brandBox).not.toBeNull();
+  expect(menuBox!.x - (brandBox!.x + brandBox!.width)).toBeLessThanOrEqual(24);
+
+  // 高さも狭い端末で、作成・編集モーダルの本文だけがスクロールし、操作欄を見失わないことを確認する。
+  await page.setViewportSize({ width: 375, height: 568 });
+  await menuButton.click();
+  await page
+    .getByRole("navigation", { name: "モバイルナビゲーション" })
+    .getByRole("link", { name: "道具管理" })
+    .click();
+  await expect(page.getByRole("heading", { name: "道具管理" })).toBeVisible();
+
+  for (const openButton of [
+    page.getByRole("button", { name: "道具を作成" }),
+    page.getByRole("button", { name: "編集" }).first(),
+  ]) {
+    await openButton.click();
+    const dialog = page.getByRole("dialog");
+    const body = dialog.locator(".overflow-y-auto");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("名前")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "保存" })).toBeVisible();
+    expect(
+      await body.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    ).toBe(true);
+    await body.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(
+      dialog.getByText(
+        "保有数はチームの総数です。日別の持ち出し操作では増減しません。",
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "保存" })).toBeVisible();
+
+    const dialogBox = await dialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(568);
+    await dialog.getByRole("button", { name: "キャンセル" }).click();
+  }
 });

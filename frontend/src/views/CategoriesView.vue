@@ -59,7 +59,13 @@ async function loadCategories(): Promise<void> {
   }
 }
 
+async function applyFilters(): Promise<void> {
+  notice.value = '';
+  await loadCategories();
+}
+
 function openCreate(): void {
+  notice.value = '';
   errorMessage.value = '';
   selectedCategory.value = null;
   form.value = { name: '', displayOrder: 0 };
@@ -67,6 +73,7 @@ function openCreate(): void {
 }
 
 function openEdit(category: ManagedCategory): void {
+  notice.value = '';
   errorMessage.value = '';
   selectedCategory.value = category;
   form.value = { name: category.name, displayOrder: category.displayOrder };
@@ -74,6 +81,7 @@ function openEdit(category: ManagedCategory): void {
 }
 
 function openStatus(category: ManagedCategory): void {
+  notice.value = '';
   errorMessage.value = '';
   selectedCategory.value = category;
   dialogMode.value = 'status';
@@ -159,8 +167,7 @@ function messageFor(error: unknown): string {
       '他の管理者が先に更新しました。一覧を再読み込みしてください。',
     CATEGORY_IN_USE:
       '利用中の道具があるため停止できません。先に対象の道具を利用停止してください。',
-    COMMON_CATEGORY_PROTECTED:
-      '共通カテゴリの名前変更・利用停止はできません。',
+    COMMON_CATEGORY_PROTECTED: '共通カテゴリの名前変更・利用停止はできません。',
   };
   return (error.code && messages[error.code]) || error.message;
 }
@@ -171,7 +178,11 @@ function messageFor(error: unknown): string {
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="mb-1 text-sm font-bold text-[#0b6b62]">管理機能</p>
-        <h1 class="text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+        <h1
+          class="text-3xl font-black tracking-tight"
+          data-page-heading
+          tabindex="-1"
+        >
           作業カテゴリ管理
         </h1>
         <p class="mt-2 text-sm text-[#49666a]">
@@ -197,7 +208,7 @@ function messageFor(error: unknown): string {
     <form
       class="mb-6 grid gap-3 rounded-2xl border border-[#cfdbd5] bg-white p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end"
       aria-label="作業カテゴリの絞り込み"
-      @submit.prevent="loadCategories"
+      @submit.prevent="applyFilters"
     >
       <label>
         <span class="mb-1 block text-sm font-bold">作業カテゴリ名</span>
@@ -297,59 +308,63 @@ function messageFor(error: unknown): string {
       @cancel.prevent="closeDialog"
       @keydown="trapFocus"
     >
-      <div class="max-h-[90dvh] overflow-y-auto p-6" @keydown.esc="closeDialog">
+      <div class="flex max-h-[90dvh] flex-col" @keydown.esc="closeDialog">
         <h2
           id="category-dialog-title"
-          class="sticky top-0 z-10 -mx-6 -mt-6 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
+          class="shrink-0 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
         >
           {{ dialogTitle }}
         </h2>
-        <p
-          v-if="errorMessage"
-          id="category-dialog-error"
-          class="mt-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </p>
         <form
           v-if="dialogMode === 'create' || dialogMode === 'edit'"
-          class="mt-5 space-y-4"
+          class="flex min-h-0 flex-1 flex-col"
           @submit.prevent="saveCategory"
         >
-          <label class="block">
-            <span class="mb-1 block font-bold">名前</span>
-            <input
-              v-model="form.name"
-              class="min-h-11 w-full rounded-xl border px-3 disabled:bg-[#e8eee9]"
-              maxlength="50"
-              required
-              :disabled="selectedCategory?.categoryType === 'COMMON'"
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="category-dialog-error"
-            />
-          </label>
-          <p
-            v-if="selectedCategory?.categoryType === 'COMMON'"
-            class="text-sm text-[#7a421e]"
+          <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            <p
+              v-if="errorMessage"
+              id="category-dialog-error"
+              class="rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
+              role="alert"
+            >
+              {{ errorMessage }}
+            </p>
+            <label class="block">
+              <span class="mb-1 block font-bold">名前</span>
+              <input
+                v-model="form.name"
+                class="min-h-11 w-full rounded-xl border px-3 disabled:bg-[#e8eee9]"
+                maxlength="50"
+                required
+                :disabled="selectedCategory?.categoryType === 'COMMON'"
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="category-dialog-error"
+              />
+            </label>
+            <p
+              v-if="selectedCategory?.categoryType === 'COMMON'"
+              class="text-sm text-[#7a421e]"
+            >
+              共通カテゴリの名前は変更できません。表示順だけ変更できます。
+            </p>
+            <label class="block">
+              <span class="mb-1 block font-bold">表示順</span>
+              <input
+                v-model.number="form.displayOrder"
+                class="min-h-11 w-full rounded-xl border px-3"
+                type="number"
+                min="0"
+                max="9999"
+                step="1"
+                required
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="category-dialog-error"
+              />
+            </label>
+          </div>
+          <div
+            class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-white px-6 py-4"
           >
-            共通カテゴリの名前は変更できません。表示順だけ変更できます。
-          </p>
-          <label class="block">
-            <span class="mb-1 block font-bold">表示順</span>
-            <input
-              v-model.number="form.displayOrder"
-              class="min-h-11 w-full rounded-xl border px-3"
-              type="number"
-              min="0"
-              max="9999"
-              step="1"
-              required
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="category-dialog-error"
-            />
-          </label>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -367,19 +382,34 @@ function messageFor(error: unknown): string {
             </button>
           </div>
         </form>
-        <div v-else-if="dialogMode === 'status'" class="mt-5">
-          <p>
-            {{ selectedCategory?.name }}を{{
-              selectedCategory?.status === 'ACTIVE' ? '利用停止' : '再有効化'
-            }}しますか？
-          </p>
-          <p
-            v-if="selectedCategory?.status === 'ACTIVE'"
-            class="mt-2 text-sm text-[#8d2f2b]"
+        <div
+          v-else-if="dialogMode === 'status'"
+          class="flex min-h-0 flex-1 flex-col"
+        >
+          <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <p
+              v-if="errorMessage"
+              id="category-dialog-error"
+              class="mb-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
+              role="alert"
+            >
+              {{ errorMessage }}
+            </p>
+            <p>
+              {{ selectedCategory?.name }}を{{
+                selectedCategory?.status === 'ACTIVE' ? '利用停止' : '再有効化'
+              }}しますか？
+            </p>
+            <p
+              v-if="selectedCategory?.status === 'ACTIVE'"
+              class="mt-2 text-sm text-[#8d2f2b]"
+            >
+              利用中の道具が紐づいている場合は停止できません。過去の日別チェックの記録は削除されません。
+            </p>
+          </div>
+          <div
+            class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-white px-6 py-4"
           >
-            利用中の道具が紐づいている場合は停止できません。過去の日別チェックの記録は削除されません。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"

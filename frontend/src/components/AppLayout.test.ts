@@ -139,11 +139,13 @@ describe('AppLayout', () => {
     expect(mobileNavigation?.querySelector('a')).toHaveFocus();
 
     await fireEvent.keyDown(mobileNavigation as HTMLElement, { key: 'Escape' });
-    expect(screen.queryByLabelText('モバイルナビゲーション')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('モバイルナビゲーション'),
+    ).not.toBeInTheDocument();
     expect(menuButton).toHaveFocus();
   });
 
-  it('xl未満をハンバーガーへ統一し、sm未満のユーザー情報をメニューへ移す', async () => {
+  it('xl未満はFieldFlow直後をハンバーガーにし、sm未満のユーザー情報をメニューへ移す', async () => {
     // 中間幅で管理者ナビゲーションが折り返し、ヘッダーが二段になる回帰を防ぐ。
     const authStore = useAuthStore();
     authStore.applySession({
@@ -164,6 +166,7 @@ describe('AppLayout', () => {
     const desktopNavigation = screen.getByRole('navigation', {
       name: 'メインナビゲーション',
     });
+    const brand = screen.getByRole('link', { name: 'FieldFlow' });
     const menuButton = screen.getByRole('button', { name: 'メニューを開く' });
     const accountMenu = screen.getByRole('navigation', {
       name: 'アカウントメニュー',
@@ -174,7 +177,9 @@ describe('AppLayout', () => {
     expect(desktopNavigation).not.toHaveClass('md:flex');
     expect(accountMenu.closest('aside')).toHaveClass('xl:block');
     expect(accountMenu.closest('aside')).not.toHaveClass('md:block');
-    expect(menuButton).toHaveClass('ml-auto', 'sm:ml-0', 'xl:hidden');
+    expect(menuButton).toHaveClass('xl:hidden');
+    expect(menuButton).not.toHaveClass('ml-auto');
+    expect(brand.nextElementSibling).toBe(menuButton);
 
     await fireEvent.click(menuButton);
     expect(screen.getByLabelText('モバイルナビゲーション')).toHaveClass(

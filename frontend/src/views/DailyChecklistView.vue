@@ -90,7 +90,8 @@ const groupedItems = computed(() => {
   }
   // 道具0件の選択カテゴリも見出しへ残し、設定されている作業を一覧で把握できるようにする。
   for (const category of currentPeriod.value?.categories ?? []) {
-    if (!groups.has(category.categoryName)) groups.set(category.categoryName, []);
+    if (!groups.has(category.categoryName))
+      groups.set(category.categoryName, []);
   }
   return [...groups.entries()].map(([categoryName, items]) => {
     const selected = items.filter((item) => item.takeoutQuantity > 0);
@@ -102,8 +103,8 @@ const groupedItems = computed(() => {
     const hasSaveFailure = items.some(
       (item) => itemSaveStates.value[item.id]?.status === 'failed',
     );
-    const hasConflict = items.some(
-      (item) => Boolean(itemSaveStates.value[item.id]?.conflict),
+    const hasConflict = items.some((item) =>
+      Boolean(itemSaveStates.value[item.id]?.conflict),
     );
     return {
       categoryName,
@@ -257,7 +258,8 @@ async function deleteChecklist(): Promise<void> {
     checklist.value = null;
     isMissing.value = true;
     deleteDialogOpen.value = false;
-    noticeMessage.value = 'この日のチェック表を削除しました。新しく作成できます。';
+    noticeMessage.value =
+      'この日のチェック表を削除しました。新しく作成できます。';
   } catch (error) {
     deleteErrorMessage.value = deleteMessageFor(error);
   } finally {
@@ -360,10 +362,7 @@ function setAllCategoriesExpanded(expanded: boolean): void {
   }
 }
 
-function expandCategory(
-  period: ChecklistPeriod,
-  categoryName: string,
-): void {
+function expandCategory(period: ChecklistPeriod, categoryName: string): void {
   expandedCategories.value[period][categoryName] = true;
 }
 
@@ -374,7 +373,9 @@ function categoryPanelId(categoryName: string): string {
   return `category-items-${currentPeriod.value?.id ?? 'unknown'}-${Math.max(index, 0)}`;
 }
 
-function categoryProgressLabel(group: (typeof groupedItems.value)[number]): string {
+function categoryProgressLabel(
+  group: (typeof groupedItems.value)[number],
+): string {
   return group.selectedCount === 0
     ? '持ち出し未設定'
     : `準備 ${group.prepared} / ${group.selectedCount}・${group.progress}%`;
@@ -382,7 +383,11 @@ function categoryProgressLabel(group: (typeof groupedItems.value)[number]): stri
 
 function changeQuantity(item: DailyChecklistItem, quantity: number): void {
   const state = saveStateFor(item.id);
-  if (!Number.isInteger(quantity) || quantity < 0 || quantity > item.stockQuantity) {
+  if (
+    !Number.isInteger(quantity) ||
+    quantity < 0 ||
+    quantity > item.stockQuantity
+  ) {
     state.status = 'failed';
     state.message = `0〜${item.stockQuantity}の整数で入力してください。`;
     return;
@@ -524,8 +529,7 @@ function itemSaveMessageFor(error: unknown): string {
     return '保存できませんでした。通信環境を確認して再試行してください。';
   const messages: Record<string, string> = {
     CHECKLIST_ITEM_QUANTITY_INVALID: '持ち出し数が在庫数を超えています。',
-    CHECKLIST_ITEM_CHECK_INVALID:
-      '持ち出し数が0の道具は準備済みにできません。',
+    CHECKLIST_ITEM_CHECK_INVALID: '持ち出し数が0の道具は準備済みにできません。',
     CHECKLIST_PAST_DATE: '過去日の内容は更新できません。',
     CHECKLIST_NOT_FOUND:
       'このチェック表は変更または削除されています。再読み込みしてください。',
@@ -566,7 +570,9 @@ function deleteMessageFor(error: unknown): string {
   <section class="mx-auto max-w-6xl">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">DAILY CHECK</p>
+        <p class="text-xs font-black tracking-[0.16em] text-[#0b6b62]">
+          DAILY CHECK
+        </p>
         <h1
           class="mt-2 text-3xl font-black tracking-tight"
           data-page-heading
@@ -591,7 +597,9 @@ function deleteMessageFor(error: unknown): string {
       aria-labelledby="date-period-settings-title"
     >
       <div class="flex items-center justify-between gap-3">
-        <h2 id="date-period-settings-title" class="font-black sm:sr-only">日付と時間帯</h2>
+        <h2 id="date-period-settings-title" class="font-black sm:sr-only">
+          日付と時間帯
+        </h2>
         <button
           class="min-h-11 rounded-xl border border-[#aebfba] px-4 font-bold sm:hidden"
           type="button"
@@ -719,7 +727,9 @@ function deleteMessageFor(error: unknown): string {
         class="mt-6 rounded-2xl border border-[#cfdbd5] bg-white p-4 sm:p-5"
         aria-label="チェック表の設定"
       >
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div
+          class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div>
             <h2 class="font-black">チェック表の設定</h2>
             <p class="mt-1 text-sm text-[#49666a]">
@@ -770,20 +780,35 @@ function deleteMessageFor(error: unknown): string {
         </p>
       </section>
 
-      <section class="mt-6 rounded-2xl bg-[#102a2e] p-5 text-white sm:p-6" aria-label="準備の進捗">
+      <section
+        class="mt-6 rounded-2xl bg-[#102a2e] p-5 text-white sm:p-6"
+        aria-label="準備の進捗"
+      >
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p class="text-sm font-bold text-[#b8d9d3]">{{ periodLabel(currentPeriod.period) }}</p>
+            <p class="text-sm font-bold text-[#b8d9d3]">
+              {{ periodLabel(currentPeriod.period) }}
+            </p>
             <p class="mt-1 text-xl font-black">
-              {{ selectedItems.length === 0 ? '持ち出し未設定' : `準備 ${preparedCount} / ${selectedItems.length}` }}
+              {{
+                selectedItems.length === 0
+                  ? '持ち出し未設定'
+                  : `準備 ${preparedCount} / ${selectedItems.length}`
+              }}
             </p>
           </div>
           <strong class="text-2xl">{{ progressPercent }}%</strong>
         </div>
         <div class="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
-          <div class="h-full rounded-full bg-[#6fd2b3]" :style="{ width: `${progressPercent}%` }"></div>
+          <div
+            class="h-full rounded-full bg-[#6fd2b3]"
+            :style="{ width: `${progressPercent}%` }"
+          ></div>
         </div>
-        <div class="mt-4 flex flex-wrap gap-2" aria-label="選択中の作業カテゴリ">
+        <div
+          class="mt-4 flex flex-wrap gap-2"
+          aria-label="選択中の作業カテゴリ"
+        >
           <span
             v-for="category in currentPeriod.categories"
             :key="category.sourceCategoryId"
@@ -791,9 +816,14 @@ function deleteMessageFor(error: unknown): string {
           >
             {{ category.categoryName }}
           </span>
-          <span class="rounded-full bg-white/10 px-3 py-1 text-sm font-bold">共通（自動）</span>
+          <span class="rounded-full bg-white/10 px-3 py-1 text-sm font-bold"
+            >共通（自動）</span
+          >
         </div>
-        <p v-if="!checklist.editable" class="mt-4 text-sm font-bold text-[#f7d4b8]">
+        <p
+          v-if="!checklist.editable"
+          class="mt-4 text-sm font-bold text-[#f7d4b8]"
+        >
           過去日のため閲覧のみです。
         </p>
       </section>
@@ -850,8 +880,12 @@ function deleteMessageFor(error: unknown): string {
                 {{ isCategoryExpanded(group.categoryName) ? '▼' : '▶' }}
               </span>
               <span class="min-w-[7rem] flex-1">
-                <span class="block text-lg font-black">{{ group.categoryName }}</span>
-                <span class="text-xs font-bold text-[#49666a]">{{ group.items.length }}種類</span>
+                <span class="block text-lg font-black">{{
+                  group.categoryName
+                }}</span>
+                <span class="text-xs font-bold text-[#49666a]"
+                  >{{ group.items.length }}種類</span
+                >
               </span>
               <span
                 v-if="group.hasSaveFailure || group.hasConflict"
@@ -859,7 +893,9 @@ function deleteMessageFor(error: unknown): string {
               >
                 ⚠ {{ group.hasConflict ? '競合あり' : '保存失敗あり' }}
               </span>
-              <span class="basis-full pl-8 text-left text-sm font-black text-[#0b6b62] sm:basis-auto sm:pl-0 sm:text-right">
+              <span
+                class="basis-full pl-8 text-left text-sm font-black text-[#0b6b62] sm:basis-auto sm:pl-0 sm:text-right"
+              >
                 {{ categoryProgressLabel(group) }}
               </span>
             </button>
@@ -881,10 +917,16 @@ function deleteMessageFor(error: unknown): string {
             >
               <div class="min-w-[7rem] flex-1">
                 <strong class="break-words">{{ item.toolName }}</strong>
-                <span class="ml-2 text-sm text-[#49666a]">在庫 {{ item.stockQuantity }}</span>
+                <span class="ml-2 text-sm text-[#49666a]"
+                  >在庫 {{ item.stockQuantity }}</span
+                >
               </div>
               <template v-if="checklist.editable">
-                <div class="flex items-center gap-1" role="group" :aria-label="`${item.toolName}の数量操作`">
+                <div
+                  class="flex items-center gap-1"
+                  role="group"
+                  :aria-label="`${item.toolName}の数量操作`"
+                >
                   <button
                     class="min-h-11 min-w-11 rounded-lg border border-[#aebfba] bg-white font-black disabled:opacity-40"
                     type="button"
@@ -895,7 +937,7 @@ function deleteMessageFor(error: unknown): string {
                     −
                   </button>
                   <input
-                    class="min-h-11 w-14 rounded-lg border border-[#aebfba] px-1 text-center font-bold"
+                    class="quantity-stepper-input min-h-11 w-14 rounded-lg border border-[#aebfba] px-1 text-center font-bold"
                     type="number"
                     inputmode="numeric"
                     min="0"
@@ -915,23 +957,35 @@ function deleteMessageFor(error: unknown): string {
                     ＋
                   </button>
                 </div>
-                <div class="ml-auto flex min-w-[6.5rem] flex-col items-end gap-1 sm:ml-0">
-                  <label class="flex min-h-11 cursor-pointer items-center gap-2 font-bold">
+                <div
+                  class="ml-auto flex min-w-[6.5rem] flex-col items-end gap-1 sm:ml-0"
+                >
+                  <label
+                    class="flex min-h-11 cursor-pointer items-center gap-2 font-bold"
+                  >
                     <input
                       type="checkbox"
                       :checked="item.checked"
                       :disabled="item.takeoutQuantity === 0"
                       :aria-label="`${item.toolName}を準備済みにする`"
-                      @change="changeChecked(item, ($event.currentTarget as HTMLInputElement).checked)"
+                      @change="
+                        changeChecked(
+                          item,
+                          ($event.currentTarget as HTMLInputElement).checked,
+                        )
+                      "
                     />
                     <span>{{ item.checked ? '準備済み' : '未準備' }}</span>
                   </label>
                   <span
                     class="text-xs font-bold"
                     :class="{
-                      'text-[#0b6b62]': saveStateFor(item.id).status === 'saved',
-                      'text-[#7a421e]': saveStateFor(item.id).status === 'saving',
-                      'text-[#9a3832]': saveStateFor(item.id).status === 'failed',
+                      'text-[#0b6b62]':
+                        saveStateFor(item.id).status === 'saved',
+                      'text-[#7a421e]':
+                        saveStateFor(item.id).status === 'saving',
+                      'text-[#9a3832]':
+                        saveStateFor(item.id).status === 'failed',
                     }"
                     role="status"
                   >
@@ -944,7 +998,11 @@ function deleteMessageFor(error: unknown): string {
                   role="alert"
                 >
                   <span>{{ saveStateFor(item.id).message }}</span>
-                  <button class="ml-2 font-bold underline" type="button" @click="retryItemSave(item)">
+                  <button
+                    class="ml-2 font-bold underline"
+                    type="button"
+                    @click="retryItemSave(item)"
+                  >
                     再試行
                   </button>
                 </div>
@@ -957,9 +1015,17 @@ function deleteMessageFor(error: unknown): string {
                     ⚠ 他のユーザーが更新したため、最新値へ戻しました。
                   </strong>
                   <span class="block">
-                    最新値: 数量{{ saveStateFor(item.id).conflict?.takeoutQuantity }}・{{ saveStateFor(item.id).conflict?.checked ? '準備済み' : '未準備' }}
+                    最新値: 数量{{
+                      saveStateFor(item.id).conflict?.takeoutQuantity
+                    }}・{{
+                      saveStateFor(item.id).conflict?.checked
+                        ? '準備済み'
+                        : '未準備'
+                    }}
                   </span>
-                  <span>内容を確認して、必要であればもう一度操作してください。</span>
+                  <span
+                    >内容を確認して、必要であればもう一度操作してください。</span
+                  >
                   <button
                     class="ml-2 font-bold underline"
                     type="button"
@@ -971,10 +1037,16 @@ function deleteMessageFor(error: unknown): string {
                 </div>
               </template>
               <template v-else>
-                <span class="whitespace-nowrap text-sm"><strong>持出</strong> {{ item.takeoutQuantity }}</span>
+                <span class="whitespace-nowrap text-sm"
+                  ><strong>持出</strong> {{ item.takeoutQuantity }}</span
+                >
                 <span
                   class="w-fit rounded-full px-3 py-1 text-sm font-bold"
-                  :class="item.checked ? 'bg-[#d8eee8] text-[#24764d]' : 'bg-[#e8eee9] text-[#49666a]'"
+                  :class="
+                    item.checked
+                      ? 'bg-[#d8eee8] text-[#24764d]'
+                      : 'bg-[#e8eee9] text-[#49666a]'
+                  "
                 >
                   {{ item.checked ? '準備済み' : '未準備' }}
                 </span>
@@ -989,7 +1061,10 @@ function deleteMessageFor(error: unknown): string {
           </ul>
         </section>
       </div>
-      <p v-else class="mt-5 rounded-2xl bg-white p-8 text-center text-[#49666a]">
+      <p
+        v-else
+        class="mt-5 rounded-2xl bg-white p-8 text-center text-[#49666a]"
+      >
         この時間帯に表示する道具はありません。
       </p>
     </template>
@@ -1007,7 +1082,9 @@ function deleteMessageFor(error: unknown): string {
       :open="categoryAdditionDialogOpen"
       :date="workDate"
       :period="currentPeriod.period"
-      :current-category-ids="currentPeriod.categories.map((category) => category.sourceCategoryId)"
+      :current-category-ids="
+        currentPeriod.categories.map((category) => category.sourceCategoryId)
+      "
       @close="categoryAdditionDialogOpen = false"
       @saved="handleCategoriesAdded"
     />
@@ -1020,12 +1097,16 @@ function deleteMessageFor(error: unknown): string {
       @keydown="trapDeleteDialogFocus"
     >
       <section class="p-6 sm:p-7">
-        <p class="text-xs font-black tracking-[0.16em] text-[#9a3832]">DELETE DAILY CHECK</p>
+        <p class="text-xs font-black tracking-[0.16em] text-[#9a3832]">
+          DELETE DAILY CHECK
+        </p>
         <h2 id="delete-checklist-title" class="mt-2 text-2xl font-black">
           この日のチェック表を削除しますか？
         </h2>
         <p class="mt-3 leading-7 text-[#49666a]">
-          {{ formatJapaneseDate(workDate) }}の入力済みの持ち出し数と準備状態も画面から削除されます。削除後は、新しいチェック表を作成できます。
+          {{
+            formatJapaneseDate(workDate)
+          }}の入力済みの持ち出し数と準備状態も画面から削除されます。削除後は、新しいチェック表を作成できます。
         </p>
         <p class="mt-3 text-sm text-[#49666a]">
           誤操作の確認に備えて、変更前の内容は内部履歴として保持されます。
@@ -1038,7 +1119,9 @@ function deleteMessageFor(error: unknown): string {
           {{ deleteErrorMessage }}
         </p>
       </section>
-      <footer class="app-dialog-actions border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4">
+      <footer
+        class="app-dialog-actions border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4"
+      >
         <button
           class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold"
           type="button"

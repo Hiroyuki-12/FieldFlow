@@ -77,6 +77,18 @@ describe('CategoriesView', () => {
       screen.getByRole('button', { name: '作業カテゴリを作成' }),
     );
     const dialog = screen.getByRole('dialog');
+    const form = within(dialog)
+      .getByRole('button', { name: '保存' })
+      .closest('form');
+    expect(dialog.firstElementChild).toHaveClass(
+      'flex',
+      'max-h-[90dvh]',
+      'flex-col',
+    );
+    expect(form?.firstElementChild).toHaveClass('min-h-0', 'overflow-y-auto');
+    expect(
+      within(dialog).getByRole('button', { name: '保存' }).parentElement,
+    ).toHaveClass('shrink-0');
     await fireEvent.update(within(dialog).getByLabelText('名前'), '  洗車  ');
     await fireEvent.update(within(dialog).getByLabelText('表示順'), '20');
     await fireEvent.click(within(dialog).getByRole('button', { name: '保存' }));
@@ -136,9 +148,7 @@ describe('CategoriesView', () => {
         '利用中の道具が紐づいている場合は停止できません。過去の日別チェックの記録は削除されません。',
       ),
     ).toBeInTheDocument();
-    await fireEvent.click(
-      screen.getByRole('button', { name: '利用停止する' }),
-    );
+    await fireEvent.click(screen.getByRole('button', { name: '利用停止する' }));
 
     expect(
       await screen.findByText(

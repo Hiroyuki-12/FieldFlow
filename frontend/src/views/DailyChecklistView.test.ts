@@ -37,9 +37,7 @@ function splitChecklist(date: string, editable = true) {
       {
         id: 'morning-period',
         period: 'MORNING',
-        categories: [
-          { sourceCategoryId: 'category-1', categoryName: '清掃' },
-        ],
+        categories: [{ sourceCategoryId: 'category-1', categoryName: '清掃' }],
         items: [
           {
             id: 'morning-item',
@@ -68,9 +66,7 @@ function splitChecklist(date: string, editable = true) {
       {
         id: 'afternoon-period',
         period: 'AFTERNOON',
-        categories: [
-          { sourceCategoryId: 'category-2', categoryName: '洗車' },
-        ],
+        categories: [{ sourceCategoryId: 'category-2', categoryName: '洗車' }],
         items: [
           {
             id: 'afternoon-item',
@@ -195,7 +191,11 @@ describe('DailyChecklistView', () => {
     server.use(
       http.get('*/api/v1/daily-checklists/2000-01-01', () =>
         HttpResponse.json(
-          { statusCode: 404, code: 'CHECKLIST_NOT_FOUND', message: 'not found' },
+          {
+            statusCode: 404,
+            code: 'CHECKLIST_NOT_FOUND',
+            message: 'not found',
+          },
           { status: 404 },
         ),
       ),
@@ -203,7 +203,9 @@ describe('DailyChecklistView', () => {
     await renderChecklist('2000-01-01');
 
     expect(
-      await screen.findByRole('heading', { name: 'この日のチェック表はありません' }),
+      await screen.findByRole('heading', {
+        name: 'この日のチェック表はありません',
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText(/過去日は記録を閲覧できます/)).toBeInTheDocument();
     expect(
@@ -215,7 +217,11 @@ describe('DailyChecklistView', () => {
     server.use(
       http.get(`*/api/v1/daily-checklists/${today}`, () =>
         HttpResponse.json(
-          { statusCode: 404, code: 'CHECKLIST_NOT_FOUND', message: 'not found' },
+          {
+            statusCode: 404,
+            code: 'CHECKLIST_NOT_FOUND',
+            message: 'not found',
+          },
           { status: 404 },
         ),
       ),
@@ -250,13 +256,17 @@ describe('DailyChecklistView', () => {
     );
     await renderChecklist('2000-01-01');
 
-    expect(await screen.findByText('過去日のため閲覧のみです。')).toBeInTheDocument();
+    expect(
+      await screen.findByText('過去日のため閲覧のみです。'),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('heading', {
         name: 'このチェック表は作成時点の内容を保存しています',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/マスターへ追加・変更した内容は自動反映されません/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/マスターへ追加・変更した内容は自動反映されません/),
+    ).toBeInTheDocument();
     expect(screen.getByText('ほうき')).toBeInTheDocument();
     expect(screen.getByText('在庫 3')).toBeInTheDocument();
     expect(
@@ -297,6 +307,11 @@ describe('DailyChecklistView', () => {
     );
     await renderChecklist(today);
 
+    // 左右の±を主操作にするため、重複するブラウザ標準スピナーを隠すclassを維持する。
+    expect(await screen.findByLabelText('ほうきの持ち出し数')).toHaveClass(
+      'quantity-stepper-input',
+    );
+
     await fireEvent.click(
       await screen.findByRole('button', { name: 'ほうきを1増やす' }),
     );
@@ -314,7 +329,9 @@ describe('DailyChecklistView', () => {
     releaseSaveRequest();
 
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(3);
-    await waitFor(() => expect(screen.getAllByText('保存済み')).toHaveLength(2));
+    await waitFor(() =>
+      expect(screen.getAllByText('保存済み')).toHaveLength(2),
+    );
     expect(categoryButton).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -369,7 +386,9 @@ describe('DailyChecklistView', () => {
 
     await waitFor(() => expect(requestCount).toBe(2));
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(3);
-    expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '再試行' }),
+    ).not.toBeInTheDocument();
   });
 
   it('同じ行への連続変更を直列化し、先の応答versionで次を保存する', async () => {
@@ -493,7 +512,9 @@ describe('DailyChecklistView', () => {
     expect(categoryButton).toHaveTextContent('競合あり');
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(1);
     expect(screen.getByLabelText('手袋の持ち出し数')).toHaveValue(0);
-    expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: '再試行' }),
+    ).not.toBeInTheDocument();
 
     await fireEvent.click(
       screen.getByRole('button', { name: 'ほうきの競合メッセージを閉じる' }),
@@ -501,7 +522,9 @@ describe('DailyChecklistView', () => {
     expect(screen.queryByText('最新値: 数量1・未準備')).not.toBeInTheDocument();
     expect(categoryButton).not.toHaveTextContent('競合あり');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'ほうきを1増やす' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'ほうきを1増やす' }),
+    );
     await waitFor(() => expect(requestCount).toBe(2));
     expect(receivedVersions).toEqual([2, 5]);
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(2);
@@ -596,13 +619,9 @@ describe('DailyChecklistView', () => {
       screen.getByText(/午前・午後から1日通しへ変更するなど/),
     ).toBeInTheDocument();
     expect(await screen.findByLabelText('清掃')).toBeChecked();
-    await fireEvent.click(
-      screen.getByRole('button', { name: '変更を保存' }),
-    );
+    await fireEvent.click(screen.getByRole('button', { name: '変更を保存' }));
 
-    expect(
-      screen.getByText('入力済みの内容があります'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('入力済みの内容があります')).toBeInTheDocument();
     await fireEvent.click(
       screen.getByRole('button', { name: '変更を確定する' }),
     );
@@ -629,13 +648,10 @@ describe('DailyChecklistView', () => {
       http.get(`*/api/v1/daily-checklists/${today}`, () =>
         HttpResponse.json(splitChecklist(today)),
       ),
-      http.delete(
-        `*/api/v1/daily-checklists/${today}`,
-        async ({ request }) => {
-          receivedBody = await request.json();
-          return new HttpResponse(null, { status: 204 });
-        },
-      ),
+      http.delete(`*/api/v1/daily-checklists/${today}`, async ({ request }) => {
+        receivedBody = await request.json();
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
     await renderChecklist(today);
 

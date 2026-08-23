@@ -22,7 +22,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 
 ## 3. パスワード
 
-- Argon2idを使用し、最低19MiB・2 iterations・parallelism 1を基準に、Cloudflare ContainerとFargateの各実行環境で応答時間を計測して安全側へ調整する。
+- Argon2idを使用し、最低19MiB・2 iterations・parallelism 1を基準に、Render FreeとFargateの各実行環境で応答時間を計測して安全側へ調整する。
 - パスワードは12〜128文字。文字種の強制や定期変更は行わず、既知の弱いパスワードは拒否できる構造にする。
 - 仮パスワードは暗号学的乱数で16文字生成し、レスポンスに一度だけ含める。
 - パスワード、仮パスワード、ハッシュ、Authorization、Cookieをログ・例外・分析イベントへ出さない。
@@ -42,16 +42,16 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 - Helmet 8.3.0のHTTPセキュリティヘッダーを設定する。本番ではCSPとHSTSを有効にし、非本番ではHTTPのSwagger UIを動かすためこの2項目だけ無効にする。
 - ログインはアカウント単位で5回失敗後15分制限し、IP単位のレート制限も併用する。成功時に失敗回数をリセットする。
 - ログインはIP単位20回/15分、一般APIは同一IPから600回/1分を初期値とする。health APIは公開基盤の死活監視を妨げないよう除外する。
-- レート制限はMVPのCloudflare Container最大1インスタンス、またはECS 1タスク構成に合わせてプロセス内Memoryで保持する。複数インスタンス・タスクへ拡張する場合はRedis等の共有Storageへ変更する。
+- レート制限はMVPのRender Free 1インスタンス、またはECS 1タスク構成に合わせてプロセス内Memoryで保持する。複数インスタンス・タスクへ拡張する場合はRedis等の共有Storageへ変更する。
 - JSONとURL encodedのリクエスト本文を100KBまでに制限し、超過はrequestId付き413で拒否する。
-- `TRUST_PROXY_HOPS`はローカル直結で0、CloudFront→ALB→ECSで2とする。CloudflareはWorker→Container間で実際に付与される転送ヘッダーとHop数をデプロイ時に確認して確定する。実際より広くProxyを信頼して送信元IPを偽装されないよう、許可値を0〜2に限定する。
+- `TRUST_PROXY_HOPS`はローカル直結で0、CloudFront→ALB→ECSで2とする。Cloudflare Worker→Render edge→NestJSも実際の転送HeaderとHop数をdeploy時に確認する。実際より広くProxyを信頼しない。
 
 ## 6. 公開環境・秘密情報
 
 ### Cloudflare公開環境
 
-- 利用者→WorkerはHTTPSを強制し、Workerを画面とAPIの単一入口にする。Containerへの直接アクセス経路を公開しない。
-- DB接続情報、JWT鍵、Cookie・Origin検証値はCloudflare Secretsで管理し、`wrangler.toml`やGitHubへ平文で保存しない。
+- 利用者→WorkerはHTTPSを強制し、Workerを画面とAPIの単一入口にする。Renderの公開URLでは共有鍵なしの業務APIを403で拒否する。
+- Worker→Render共有鍵はCloudflare Secret、DB接続情報・JWT鍵・TLS CA・OriginはRender Secretで管理し、設定ファイルやGitHubへ平文保存しない。
 - Aiven MySQLはTLS証明書を検証して接続し、公開アプリ用の最小権限DBユーザーを使用する。
 - Cloudflare API Tokenは対象Account・Workerへ必要な権限だけを付与し、アカウント全体を操作できるGlobal API KeyをCIへ保存しない。
 

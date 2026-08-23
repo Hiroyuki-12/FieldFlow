@@ -37,6 +37,7 @@ function loginRedirect(to: RouteLocationNormalized) {
 export function createAppRouter(
   pinia: Pinia,
   history: RouterHistory = createWebHistory(import.meta.env.BASE_URL),
+  waitForApplicationReady: () => Promise<void> = () => Promise.resolve(),
 ) {
   const router = createRouter({
     history,
@@ -116,7 +117,9 @@ export function createAppRouter(
     ],
   });
 
-  router.beforeEach((to) => {
+  router.beforeEach(async (to) => {
+    // 初期navigationをBackend起動・Session復元より先へ進めず、誤ったLogin redirectを防ぐ。
+    await waitForApplicationReady();
     const authStore = useAuthStore(pinia);
 
     if (to.meta.requiresAuth && !authStore.isAuthenticated) {

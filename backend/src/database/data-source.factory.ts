@@ -2,6 +2,7 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 
 import { DATABASE_ENTITIES } from './entities';
 import { DATABASE_MIGRATIONS } from './migrations';
+import { createDatabaseConnectionOptions } from './database-connection-options';
 
 function requireEnvironmentValue(
   environment: NodeJS.ProcessEnv,
@@ -12,6 +13,40 @@ function requireEnvironmentValue(
     throw new Error(`${key} is required for database operations`);
   }
   return value;
+}
+
+function readPositiveInteger(
+  environment: NodeJS.ProcessEnv,
+  key: string,
+  defaultValue: number,
+  maximum: number,
+): number {
+  const rawValue = environment[key];
+  const value = rawValue === undefined ? defaultValue : Number(rawValue);
+  if (!Number.isInteger(value) || value <= 0 || value > maximum) {
+    throw new Error(
+      `${key} must be an integer between 1 and ${String(maximum)}`,
+    );
+  }
+  return value;
+}
+
+function readBoolean(
+  environment: NodeJS.ProcessEnv,
+  key: string,
+  defaultValue: boolean,
+): boolean {
+  const value = environment[key];
+  if (value === undefined) {
+    return defaultValue;
+  }
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  throw new Error(`${key} must be true or false`);
 }
 
 /**
@@ -42,6 +77,17 @@ export function createDatabaseDataSource(
     entities: DATABASE_ENTITIES,
     migrations: DATABASE_MIGRATIONS,
     migrationsTableName: 'migrations',
+    ...createDatabaseConnectionOptions({
+      poolLimit: readPositiveInteger(environment, 'DB_POOL_LIMIT', 5, 10),
+      connectTimeoutMs: readPositiveInteger(
+        environment,
+        'DB_CONNECT_TIMEOUT_MS',
+        10_000,
+        30_000,
+      ),
+      tlsEnabled: readBoolean(environment, 'DB_TLS_ENABLED', false),
+      tlsCaBase64: environment.DB_TLS_CA_BASE64,
+    }),
     // NestJS側と同様に自動同期を禁止し、CLIからもMigrationだけを適用する。
     synchronize: false,
     // `migration:run`などの明示的なコマンドを実行した場合だけDBを変更する。

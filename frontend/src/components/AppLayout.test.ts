@@ -143,6 +143,48 @@ describe('AppLayout', () => {
     expect(menuButton).toHaveFocus();
   });
 
+  it('xl未満をハンバーガーへ統一し、sm未満のユーザー情報をメニューへ移す', async () => {
+    // 中間幅で管理者ナビゲーションが折り返し、ヘッダーが二段になる回帰を防ぐ。
+    const authStore = useAuthStore();
+    authStore.applySession({
+      accessToken: 'admin-token',
+      expiresIn: 900,
+      user: {
+        id: 'admin-1',
+        name: '管理者',
+        loginId: 'admin01',
+        role: 'ADMIN',
+        mustChangePassword: false,
+      },
+    });
+    const router = createLayoutRouter();
+    await router.push('/');
+    render(AppLayout, { global: { plugins: [router] } });
+
+    const desktopNavigation = screen.getByRole('navigation', {
+      name: 'メインナビゲーション',
+    });
+    const menuButton = screen.getByRole('button', { name: 'メニューを開く' });
+    const accountMenu = screen.getByRole('navigation', {
+      name: 'アカウントメニュー',
+    });
+
+    expect(desktopNavigation).toHaveClass('xl:flex');
+    expect(desktopNavigation).toHaveClass('flex-nowrap', 'whitespace-nowrap');
+    expect(desktopNavigation).not.toHaveClass('md:flex');
+    expect(accountMenu.closest('aside')).toHaveClass('xl:block');
+    expect(accountMenu.closest('aside')).not.toHaveClass('md:block');
+    expect(menuButton).toHaveClass('ml-auto', 'sm:ml-0', 'xl:hidden');
+
+    await fireEvent.click(menuButton);
+    expect(screen.getByLabelText('モバイルナビゲーション')).toHaveClass(
+      'xl:hidden',
+    );
+    expect(screen.getByLabelText('メニュー内のユーザー情報')).toHaveClass(
+      'sm:hidden',
+    );
+  });
+
   it('現在のナビゲーション項目をaria-currentで示す', async () => {
     const authStore = useAuthStore();
     authStore.applySession({

@@ -4,13 +4,13 @@
 
 AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFront、ALB、ECS Fargate、RDS MySQLへデプロイし、Terraformと承認付きCDで再現できる状態を作る。
 
-コンテスト・転職用ポートフォリオの長期公開はロードマップ16のCloudflare・Aiven環境が担当する。AWS環境はAWSのネットワーク、コンテナ、マネージドDB、監視、IaCを学習・説明するための別環境とし、課題レビュー期間と費用を確認して運用する。
+コンテスト・転職用ポートフォリオの長期公開はロードマップ16のCloudflare・Render・Aiven環境が担当する。AWS環境はAWSのnetwork、container、managed DB、監視、IaCを学習・説明するための別環境とし、課題review期間と費用を確認して運用する。
 
 実装開始時にロードマップ17専用Issueを起票する。RaiseTimeLineのTerraform・AWS構成は設計判断と実装手順の参考にするが、FieldFlowの名前、port、health、Secrets、MySQL 8.4、現在のAWS仕様に合わせて差分を確認する。
 
 ## 2. 前提
 
-- ロードマップ16までのアプリケーション、Migration、Container、公開スモーク確認が完了している。
+- ロードマップ16までのApplication、Migration、Render用Docker image、公開smoke確認が完了している。
 - AWS CLIで対象AccountとRegionを確認する。
 - Terraformの`fmt`、`validate`、`plan`までは読み取り中心に進め、`apply`、サービス更新、停止、`destroy`は対象・費用・影響を説明してユーザー承認後に行う。
 - RDSのMySQL 8.4対応、利用可能Instance class、AWS料金、無料枠条件は実装時に公式情報で再確認する。
@@ -50,7 +50,7 @@ AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFr
 
 ## 4. 対象外
 
-- Cloudflare・Aiven環境の置き換えまたは停止
+- Cloudflare・Render・Aiven環境の置き換えまたは停止
 - Multi-AZ、ECS複数Task、Auto Scaling、WAF、独自ドメイン
 - AWS公開DBへE2E Seedやk6を直接実行すること
 - 課題レビュー期間を確認しない自動`destroy`

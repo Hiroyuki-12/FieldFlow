@@ -18,6 +18,13 @@ describe('createDatabaseDataSource', () => {
     expect(dataSource.options.migrationsRun).toBe(false);
     expect(dataSource.options.entities).toHaveLength(8);
     expect(dataSource.options.migrations).toHaveLength(2);
+    expect(dataSource.options).toMatchObject({
+      poolSize: 5,
+      connectTimeout: 10000,
+    });
+    expect(
+      'ssl' in dataSource.options ? dataSource.options.ssl : undefined,
+    ).toBeUndefined();
   });
 
   it('DB接続設定が不足している場合は実行前に拒否する', () => {
@@ -28,5 +35,37 @@ describe('createDatabaseDataSource', () => {
         DB_PASSWORD: undefined,
       }),
     ).toThrow('DB_PASSWORD');
+  });
+
+  it('Migration CLIでもAiven TLSとpool上限を適用する', () => {
+    // 通常アプリだけでなく、一回限りのMigrationも同じ証明書検証を通ることを保証する。
+    const ca =
+      '-----BEGIN CERTIFICATE-----\ntest-ca\n-----END CERTIFICATE-----\n';
+    const dataSource = createDatabaseDataSource({
+      ...validEnvironment,
+      DB_POOL_LIMIT: '3',
+      DB_CONNECT_TIMEOUT_MS: '5000',
+      DB_TLS_ENABLED: 'true',
+      DB_TLS_CA_BASE64: Buffer.from(ca).toString('base64'),
+    });
+
+    expect(dataSource.options).toMatchObject({
+      poolSize: 3,
+      connectTimeout: 5000,
+      ssl: {
+        ca,
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2',
+      },
+    });
+  });
+
+  it('Migration CLIでも不正なTLS設定をDB接続前に拒否する', () => {
+    expect(() =>
+      createDatabaseDataSource({
+        ...validEnvironment,
+        DB_TLS_ENABLED: 'true',
+      }),
+    ).toThrow('DB_TLS_CA_BASE64');
   });
 });

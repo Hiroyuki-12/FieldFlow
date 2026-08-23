@@ -1,133 +1,182 @@
-# Cloudflare・Aiven公開構成
+# Cloudflare・Render・Aiven公開構成
 
 ## 1. 方針
 
-コンテスト審査と転職用ポートフォリオでは、低アクセスの期間も公開URLを維持できるよう、Cloudflareを画面とAPIの単一入口にする。BackendはCloudflare Containersで必要時に起動し、永続データはAiven for MySQL 8.4へ保存する。
+コンテスト審査と転職用ポートフォリオでは、Cloudflare Workers Static Assetsと無料枠Workerを画面・APIの単一公開Originにする。VueはCloudflare edgeから配信し、Workerは`/api/*`だけをRender Free Web ServiceのNestJSへproxyする。永続データは作成済みのAiven for MySQL 8.4へTLS接続して保存する。
 
-Cloudflare Containersのローカルディスクは一時領域であり、停止・再作成・デプロイ後の永続性を保証しない。そのためMySQLをBackend Container内で動かさず、Containerのライフサイクルから独立したAivenへ分離する。
+Cloudflare Containersは使用しない。Workers Paidの月額契約を避けながら既存のDocker化したNestJSを動かすため、Backend computeをRender Freeへ分離する。Renderのローカルファイルは停止・再作成・デプロイで失われるため、MySQLはRender内へ置かない。
 
-## 2. 全体構成
+## 2. インフラ構成図
 
 ```mermaid
 flowchart TD
-    U[利用者] -->|HTTPS| W[Cloudflare Worker]
-    W -->|静的ファイル| ASSET[Workers Static Assets<br/>Vue dist]
-    W -->|/api/*| CONTAINER[Cloudflare Container<br/>NestJS port 8080]
-    SECRET[Cloudflare Secrets] --> CONTAINER
-    CONTAINER -->|TLS / MySQL protocol| AIVEN[Aiven for MySQL 8.4]
-    W --> WLOG[Workers Logs]
-    CONTAINER --> CLOG[Containers Logs]
-    AIVEN --> AMETRIC[Aiven metrics / backup]
+    U[利用者のBrowser]
+
+    subgraph CF[Cloudflare Workers Free]
+        ORIGIN[公開Origin<br/>fieldflow.fieldflow-portfolio.workers.dev]
+        ASSET[Workers Static Assets<br/>Vue dist / SPA fallback]
+        WORKER[Worker ingress<br/>/api/* routing]
+        CFSECRET[Cloudflare Secret<br/>Render proxy共有鍵]
+        WLOG[Workers Logs]
+    end
+
+    subgraph RENDER[Render Free Web Service / Singapore]
+        REDGE[Render HTTPS edge<br/>fieldflow-api-l94x.onrender.com]
+        API[NestJS Docker container<br/>dynamic PORT / non-root]
+        RSECRET[Render Secrets<br/>DB / TLS CA / JWT / proxy共有鍵]
+        RLOG[Render Logs]
+    end
+
+    AIVEN[Aiven for MySQL 8.4 Free<br/>永続DB / backup / metrics]
+
+    U -->|HTTPS: 画面・API・Cookie| ORIGIN
+    ORIGIN -->|静的request| ASSET
+    ORIGIN -->|/api/*| WORKER
+    CFSECRET --> WORKER
+    WORKER -->|HTTPS + proxy共有鍵| REDGE
+    REDGE --> API
+    RSECRET --> API
+    API -->|TLS証明書検証 / MySQL protocol| AIVEN
+    WORKER --> WLOG
+    API --> RLOG
 ```
 
-VueとAPIを同じ`workers.dev`または独自ドメイン配下で公開し、Frontendの`VITE_API_BASE_URL=/api/v1`を維持する。Refresh Cookieを別サイトへ送らずに済むため、`HttpOnly; Secure; SameSite=Lax`の現在の認証設計を変更しない。
+Vueの`VITE_API_BASE_URL=/api/v1`を維持し、画面とAPIを同じCloudflare Origin配下で公開する。Login／Refresh responseの`Set-Cookie`はWorkerが変更せずBrowserへ返す。Domain属性を付けないRefresh CookieはCloudflare公開Originへ保存され、`Path=/api/v1/auth; HttpOnly; Secure; SameSite=Lax`の既存設計を維持できる。
 
-## 3. サービス別設計
+## 3. request flow
+
+### 通常時
+
+1. BrowserがCloudflareの公開URLへアクセスする。
+2. HTML、CSS、JavaScriptはWorkers Static Assetsが返す。
+3. Browserは同じOriginの`/api/*`を呼ぶ。
+4. WorkerはRender URLへpath、query、method、bodyを保って転送する。
+5. NestJSはAiven MySQLへ証明書検証付きTLSで接続する。
+6. WorkerはRender responseとRefresh CookieをBrowserへ透過する。
+
+### Renderコールドスタート時
+
+```mermaid
+sequenceDiagram
+    participant B as Browser / Vue
+    participant W as Cloudflare Worker
+    participant R as Render Free / NestJS
+
+    B->>W: GET /api/health（4秒timeout）
+    W->>R: GET /api/health
+    R--xW: 起動中 / 502・503・504 / network待機
+    W-->>B: 503 BACKEND_STARTING<br/>Retry-After: 5
+    Note over B: 起動待ち画面を表示
+    loop 3秒→5秒→8秒→最大10秒
+        B->>W: GET /api/health
+        W->>R: GET /api/health
+    end
+    R-->>W: 200 { status: ok }
+    W-->>B: 200
+    Note over B: Refresh CookieでSession復元後に画面表示
+```
+
+Render Freeは15分間inbound trafficがないと停止し、次のrequestで再起動する。起動は約1分かかる場合がある。Frontendはhealthを4秒で区切り、3秒、5秒、8秒、以後最大10秒間隔で再確認する。外形監視や常時pingで意図的に起動状態を維持せず、無料枠の設計を尊重する。
+
+## 4. サービス別責務
 
 | サービス | 責務 |
 | --- | --- |
-| Worker | HTTPSの単一入口。`/api/*`をBackend Containerへ渡し、それ以外を静的Assetsへ渡す |
-| Workers Static Assets | `frontend/dist`のHTML、CSS、JavaScriptを配信し、Vue Router用のSPA fallbackを行う |
-| Cloudflare Containers | Node.js 24のNestJS、Argon2id、TypeORM、`mysql2`を既存構成のまま実行する |
-| Cloudflare Secrets | DBパスワード、JWT鍵、DB TLS関連値などを暗号化して保持し、Container起動時に注入する |
-| Aiven for MySQL | MySQL 8.4の永続データ、バックアップ、メトリクスをContainerと独立して管理する |
-| Wrangler | Worker、Assets、Container、非秘密設定を宣言し、ローカル確認とデプロイを行う |
+| Cloudflare Worker | HTTPSの単一入口。`/api/*`をRenderへproxyし、Proxy Headerと共有鍵を安全な値へ置換する |
+| Workers Static Assets | `frontend/dist`のHTML、CSS、JavaScript配信とVue Router用SPA fallback |
+| Render Free Web Service | Node.js 24、NestJS、Argon2id、TypeORM、`mysql2`をDockerで実行する |
+| Aiven for MySQL | MySQL 8.4の永続データ、backup、metricsをBackendのライフサイクルから分離して管理する |
+| Wrangler / `render.yaml` | 非秘密設定、routing、build、health、Free plan、regionをコードで再現する |
 
-Cloudflare D1はSQLite系であり、MySQL用Entity、Migration、制約の互換性を保証できないため採用しない。RenderのマネージドDBはPostgreSQLが中心で、MySQLを使う場合はPersistent Disk上の自己管理が必要になるため、今回の永続DBには採用しない。
+Cloudflare D1はSQLite系でMySQL用Entity・Migration・制約の互換性がないため採用しない。Render PostgresもDB種別が異なるため、確定技術のMySQL 8.4をAivenで維持する。
 
-## 4. Container設計
+## 5. Render Backend設計
 
-- BackendはマルチステージDockerfileでbuildし、runtime imageへ本番依存と`dist`だけを含める。
-- Node.js 24を使用し、Cloudflareの実行要件に合わせた`linux/amd64`イメージとして検証する。
-- 非rootユーザーでport `8080`を待ち受ける。
-- health確認は`GET /api/health`を使用し、秘密情報やDB接続詳細を返さない。
-- ポートフォリオの低アクセスを前提に、アイドル後はContainerをスリープさせる。
-- 予期しない並列起動と費用増加、Aivenの接続上限超過を防ぐため、初期は最大Instance数を1に制限する。
-- スリープ後の初回リクエストではコールドスタートが発生し得るため、READMEへ数秒待って再試行する可能性を記載する。
+- `backend/Dockerfile`のmulti-stage build、Node.js 24、非root実行を再利用する。
+- Renderが注入する`PORT`を受け入れ、`0.0.0.0`でlistenする。
+- Render regionは日本から近いSingaporeとする。regionは作成後に変更できない。
+- `GET /api/health`でAPIとDBの疎通を確認する。
+- `render.yaml`は`plan: free`と`autoDeployTrigger: off`を明示し、承認なしの外部更新を防ぐ。
+- Free serviceはsingle instance、ephemeral filesystemで運用し、永続データを置かない。
+- DB poolは5接続に制限し、Aiven Freeの接続上限を使い切らない。
 
-Containerのスリープ時間、Instance type、上限は実装時の実測メモリ、Argon2id応答時間、料金表を確認して決める。設計書の値を検証せず固定しない。
+## 6. 同一Originと入口保護
 
-## 5. Aiven MySQL接続
+- BrowserはRender URLをAPI base URLとして使用しない。
+- Workerは利用者入力の`Forwarded`、`X-Forwarded-*`、`X-FieldFlow-Proxy-Secret`を削除してから再構成する。
+- WorkerとNestJSへ同じ32byte以上のproxy共有鍵をSecret登録する。
+- NestJSは共有鍵がない業務APIを`403`で拒否する。Renderのplatform health checkに必要な`/api/health`だけは共有鍵なしで許可する。
+- `CORS_ORIGIN`はCloudflare公開Originへ固定し、資格情報付きCORSにwildcardを使わない。
+- WorkerがRenderの502、503、504または接続例外を、内部情報のない`503 BACKEND_STARTING`へ統一する。
 
-- MySQL 8.4を選び、ローカル・Testcontainers・RDSと同じメジャーバージョンを維持する。
-- Aivenが発行するhost、port、database、user、passwordを環境変数としてContainerへ渡す。
-- Containerの外向き通信はAivenのhostを許可対象へ限定し、MySQLのTCP接続とDNS解決が本番で成功することを確認する。
-- 公開ネットワークを通るためTLS証明書を検証し、暗号化だけで証明書検証を無効にする設定は採用しない。
-- TypeORMの接続設定へ本番用TLS有効化とCA読込を追加し、ローカル開発では従来どおりTLSなしを選べるようにする。
-- 接続poolの上限をAivenプランの`max_connections`より十分小さくし、最大Container数との積で上限を超えないようにする。
-- 無料枠はSLA対象外で、継続利用がない場合に休止される可能性がある。通知を確認し、長期公開の可用性が不足する場合は有料プランまたは別DBへ移行する。
+## 7. Aiven MySQL接続
 
-## 6. 秘密値と環境変数
+- 作成済みのAiven MySQL 8.4 Free serviceを使用する。
+- host、port、database、user、password、CAはRender環境変数へ登録し、Gitへ含めない。
+- 公開networkを通るためTLS証明書を検証し、`rejectUnauthorized=false`は使用しない。
+- CAのPEMはBase64化して`DB_TLS_CA_BASE64`へ登録し、起動時に復元する。
+- TypeORM `synchronize`は禁止し、review済みMigrationを一回限りの承認付き処理で適用する。
 
-Gitで管理するWrangler設定には、サービス名、port、Assets path、スリープ方針などの非秘密値だけを記載する。
+## 8. 秘密値
 
-Cloudflare Secretsで管理する主な値:
+Cloudflare Secret:
 
-- `DB_PASSWORD`
-- `JWT_ACCESS_SECRET`
-- AivenのTLS CAを渡すための値
-- 初期Seedを実行するときだけ必要な初期管理者パスワード
+- `RENDER_PROXY_SECRET`
 
-DBの接続情報やJWT鍵をDocker imageの`ARG`・`ENV`、Wranglerの平文`vars`、GitHub Actionsログ、READMEへ含めない。初期管理者パスワードはSeed後に通常Containerへ残さない。
+Render Secret / dashboard入力:
 
-## 7. Migration・Seed・デプロイ
+- `CORS_ORIGIN`
+- `INGRESS_PROXY_SECRET`（Cloudflareと同じ値）
+- `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD`
+- `DB_TLS_CA_BASE64`
+- `JWT_ACCESS_SECRET`（Blueprintで生成）
 
-初回公開では次の順序を守る。
+初期管理者passwordはMigration／Seed時だけ使用し、Render通常runtimeへ登録しない。秘密値はチャット、Git、command引数、shell history、build logへ含めない。
 
-1. Aiven for MySQL 8.4を作成し、TLS接続を確認する。
-2. Cloudflare用のBackend imageをローカルでbuild・起動確認する。
-3. 承認された一回限りの実行環境から`migration:show`と`migration:run`をAivenへ実行する。
-4. `seed:run`で初期管理者と`共通`カテゴリを作成する。
-5. Cloudflare Secretsを登録する。
-6. Worker、Assets、Containerをデプロイする。
-7. 公開URLでhealth、ログイン、Refresh、管理画面、日別表更新をスモーク確認する。
+## 9. Migration・Seed・デプロイ順序
 
-MigrationをContainerの通常起動コマンドへ連結しない。Containerがコールドスタートや再配置で複数回起動しても、DDLを繰り返さないためである。自動CDを追加するときも、Migration成功をBackend更新の前提条件にする。
+1. Aiven MySQL 8.4の`Running`とTLS接続を確認する。
+2. Local／CIでFrontend、Backend image、Workerを検証する。
+3. 承認された一回限りの環境からAivenへMigrationと初期Seedを適用する。
+4. 承認後にRender Free Web Serviceを作成し、Render Secretsを登録する。
+5. Renderをdeployし、Render URLのhealthを確認する。
+6. Cloudflareへproxy共有鍵をSecret登録する。
+7. WorkerとStatic Assetsをdeployする。
+8. Cloudflare公開URLでコールドスタート、Login、Refresh、管理、日別表更新を確認する。
 
-## 8. セキュリティ
+MigrationをRenderの通常起動やpre-deployへ自動連結しない。コールドスタート、再起動、deployのたびにDDLを繰り返さず、失敗時にBackend更新を止められるようにする。
 
-- 利用者からWorkerまではHTTPSを強制する。
-- APIは同一オリジンの`/api/*`だけから利用し、資格情報付きCORSへワイルドカードを使用しない。
-- `CORS_ORIGIN`は実際の`workers.dev`または独自ドメインに固定する。
-- `COOKIE_SECURE=true`を使用する。
-- WorkerからContainerへ送るProxyヘッダーを実測し、`TRUST_PROXY_HOPS`を実際の段数だけに設定する。
-- Workerで転送する`X-Forwarded-For`等を利用者入力のまま信頼しない。
-- Aiven接続はTLS証明書を検証する。
-- 公開デモ用管理者をREADMEへ載せる場合は、第三者によるデータ変更を想定し、長期公開前にデモ保護または復旧手順を実装する。
+## 10. 費用・無料枠・監視
 
-## 9. ログ・監視・費用
+2026年8月時点の開始前提:
 
-- WorkerとContainerのログを有効にし、requestIdでNestJSのJSONログを追跡する。
-- Aivenの接続数、ストレージ、バックアップ、休止通知を確認する。
-- 外形監視は公開health APIを低頻度で確認し、コールドスタートを無効化する目的の過剰な常時pingは行わない。
-- 最大Instance数、スリープ時間、CPU上限を設定し、課金画面と利用量を定期確認する。
-- 料金プランと無料枠は実装時に公式情報を再確認し、想定を超えた場合の停止条件を決める。
-
-### 2026年8月時点の費用前提
-
-| 項目 | 前提 | 注意点 |
+| 対象 | 費用前提 | 主な制限 |
 | --- | --- | --- |
-| Cloudflare Workers / Containers | ContainersはWorkers Paidプランが必要で、基本料金は月額5 USD。Container使用量の一部が含まれる | 5 USDは上限ではない。Instance、CPU、ディスク、ログ、Durable Objects、超過通信量により追加課金があり得る |
-| Aiven for MySQL | 無料枠はクレジットカード不要・期間制限なし。1 node、1 CPU、1 GB RAM、1 GB disk、最大76接続、監視・バックアップ付き | SLA・サポート対象外。継続的な利用がないサービスは通知後に停止されることがあり、手動再開が必要 |
+| Workers Static Assets | 0 USD。静的asset requestとstorageに追加料金なし | Freeは1 versionあたり20,000 files、1 file 25 MiB |
+| Workers Free | 0 USD | 100,000 requests/day、CPU 10 ms/invocation。`/api/*`だけWorkerを実行する |
+| Render Free Web Service | 0 USD | workspace合計750 instance hours/month、15分idleで停止、再起動約1分、ephemeral filesystem、outbound/build/bandwidth枠あり |
+| Aiven MySQL Free | 0 USD | 1 node、1 CPU、1 GB RAM、1 GB disk、最大76接続、SLAなし、未使用時に停止される可能性あり |
 
-したがって「完全無料で常時起動」ではなく、「Cloudflareの月額5 USD程度を基本に、BackendはScale to Zero、DBはAiven無料枠で開始する低予算構成」と説明する。コンテスト審査期間はAivenの通知と稼働状態を毎日確認し、レビューに必要な期間の可用性を優先する。
+Worker request上限超過時は`/api/*`が429または制限errorになり得る。Renderは月間枠や外向き通信量の条件で停止される可能性がある。Cloudflare usage、Render usage／events、Aiven接続数／storage／通知を確認し、無料枠を超える前に公開継続またはpaid移行を判断する。
 
-## 10. 対象外
+## 11. 対象外
 
+- Cloudflare Containers、Durable Objects、Workers Paid
 - Cloudflare D1へのDB移行
-- 複数Container Instanceへの水平分散
-- 独自ドメインの必須化
-- SLA、無停止デプロイ、Multi-Region DBの保証
+- Render paid instance、複数instance、persistent disk
+- 独自domainの必須化
+- SLA、無停止deploy、multi-region DBの保証
 - 公開環境へのk6負荷試験
 
-## 11. 参照資料
+## 12. 参照資料
 
 - [Cloudflare Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/)
-- [Cloudflare Containers](https://developers.cloudflare.com/containers/)
-- [Cloudflare Containers pricing](https://developers.cloudflare.com/containers/pricing/)
-- [Cloudflare Containers lifecycle](https://developers.cloudflare.com/containers/platform-details/architecture/)
-- [Cloudflare Containers secrets](https://developers.cloudflare.com/containers/examples/env-vars-and-secrets/)
-- [Cloudflare Containers outbound traffic](https://developers.cloudflare.com/containers/platform-details/outbound-traffic/)
+- [Static Assets billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)
+- [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [Render Free services](https://render.com/docs/free)
+- [Render Blueprint YAML reference](https://render.com/docs/blueprint-spec)
+- [Render Web Services](https://render.com/docs/web-services)
+- [Render regions](https://render.com/docs/regions)
+- [Render health checks](https://render.com/docs/health-checks)
 - [Aiven for MySQL free tier](https://aiven.io/docs/products/mysql/concepts/mysql-free-tier)
 - [Aiven for MySQL version lifecycle](https://aiven.io/docs/products/mysql/reference/version-lifecycle)
-- [Aiven for MySQL version management](https://aiven.io/docs/products/mysql/howto/manage-mysql-version)

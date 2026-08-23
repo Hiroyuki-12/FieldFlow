@@ -124,4 +124,31 @@ describe('認証StoreとAxios Client', () => {
     expect(authStore.isAuthenticated).toBe(false);
     expect(authStore.accessToken).toBeNull();
   });
+
+  it('WorkerがRender起動中を返した場合は起動待ち状態を通知する', async () => {
+    server.use(
+      http.get('*/api/v1/protected', () =>
+        HttpResponse.json(
+          { code: 'BACKEND_STARTING' },
+          {
+            status: 503,
+            headers: { 'X-FieldFlow-Backend-State': 'starting' },
+          },
+        ),
+      ),
+    );
+    const onBackendUnavailable = vi.fn();
+    configureAuthSessionBridge({
+      getAccessToken: () => null,
+      refreshAccessToken: () => Promise.reject(new Error('not used')),
+      onSessionExpired: vi.fn(),
+      onBackendUnavailable,
+    });
+
+    await expect(apiHttpClient.get('/protected')).rejects.toMatchObject({
+      status: 503,
+      code: 'BACKEND_STARTING',
+    });
+    expect(onBackendUnavailable).toHaveBeenCalledTimes(1);
+  });
 });

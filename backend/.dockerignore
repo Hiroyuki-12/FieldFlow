@@ -1,0 +1,12 @@
+# build contextへ秘密値・ローカル生成物・開発ツールの状態を含めない。
+.env
+.env.*
+!.env.example
+node_modules
+dist
+coverage
+test
+*.log
+.DS_Store
+.git
+.gitignore

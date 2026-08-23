@@ -1,0 +1,49 @@
+# Render Free Web ServiceはNestJSだけを実行する。永続データは外部Aiven MySQLへ保存する。
+services:
+  - type: web
+    name: fieldflow-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    # 外部環境の更新は承認ゲートを通すため、Git pushだけでは自動デプロイしない。
+    autoDeployTrigger: off
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: CORS_ORIGIN
+        sync: false
+      - key: TRUST_PROXY_HOPS
+        value: "2"
+      - key: INGRESS_PROXY_SECRET
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_POOL_LIMIT
+        value: "5"
+      - key: DB_CONNECT_TIMEOUT_MS
+        value: "10000"
+      - key: DB_TLS_ENABLED
+        value: "true"
+      - key: DB_TLS_CA_BASE64
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_TTL_SECONDS
+        value: "900"
+      - key: REFRESH_TOKEN_TTL_SECONDS
+        value: "604800"
+      - key: COOKIE_SECURE
+        value: "true"

@@ -13,10 +13,12 @@
 flowchart LR
     PR[Pull Request] --> F["Frontend<br/>lint/typecheck/test/build"]
     PR --> B["Backend<br/>lint/typecheck/unit/integration/build"]
+    PR --> C["Cloudflare<br/>typecheck/test/dry-run"]
     PR --> E["E2E<br/>MySQL+NestJS+Vue+Playwright"]
     PR --> T["Terraform<br/>fmt-check/validate"]
     F --> G[Required checks]
     B --> G
+    C --> G
     E --> G
     T --> G
 ```
@@ -41,6 +43,13 @@ flowchart LR
 7. `backend/dist`をArtifactとして7日間保存
 
 CI基盤の初期段階では、Health APIのHTTP経路をDB mockと組み合わせた軽量な結合テストを実行する。業務Entity、Migration、Seedの追加後は、Testcontainers MySQL 8.4を用いたDB結合テストを同じコマンドへ追加する。
+
+### Cloudflare job
+
+1. Frontendをbuildし、Workers Static Assets用の`frontend/dist`を作る
+2. Workerの型チェックとAPI／Assets routing単体テストを実行する
+3. `wrangler deploy --dry-run`でWorker bundleとAssets設定を検証する
+4. Cloudflare API Tokenや本番Secretsを使わず、外部環境を変更しない
 
 ### CIの再現性と安全性
 
@@ -67,17 +76,19 @@ k6性能試験は通常PRのRequired checkへ含めず、リリース候補、�
 flowchart TD
     M[main merge] --> CI[CI成功]
     CI --> A[cloudflare-public承認]
-    A --> BUILD[Frontend・Backend build]
+    A --> BUILD[Frontend・Backend image build]
     BUILD --> MIG[One-off TypeORM migration<br/>Aiven MySQL]
-    MIG -->|成功| DEPLOY[wrangler deploy<br/>Worker・Assets・Container]
+    MIG -->|成功| RENDER[Render manual deploy<br/>NestJS Free Web Service]
     MIG -->|失敗| STOP[デプロイ停止]
-    DEPLOY --> SMOKE[公開URL smoke確認]
+    RENDER --> HC[Render health確認]
+    HC --> DEPLOY[wrangler deploy<br/>Worker・Assets]
+    DEPLOY --> SMOKE[Cloudflare公開URL smoke確認]
 ```
 
 - 初回公開は手順を理解しながら手動実行してよいが、実行コマンド、設定値の置き場所、確認結果を記録し、再現できる状態にする。
 - 自動化時は対象Account・Workerに限定したCloudflare API Tokenを`cloudflare-public` Environmentへ保存する。Global API Keyは使用しない。
 - Aiven Migration用の接続情報とTLS CAはEnvironment Secretsで保護し、WorkflowログやArtifactへ出さない。
-- Migration成功後だけ`wrangler deploy`を実行し、Worker、Static Assets、Containerを同じ公開入口へ反映する。
+- Migration成功後だけRenderを更新し、Render health成功後にWorkerとStatic AssetsをCloudflareへ反映する。
 - 公開URLでhealth、ログイン、Refresh、日別表の最小スモーク確認を行う。公開環境へk6負荷試験は実行しない。
 
 ### 3.2 AWS課題環境
@@ -106,10 +117,10 @@ flowchart TD
 - PRで`terraform fmt -check`と`terraform validate`を行う。
 - `plan`はAWS認証が利用できる安全なイベントで生成し、秘密値をartifactへ含めない。
 - `apply`と`destroy`は自動実行せず、差分・影響・復旧方法を説明してユーザー承認後に行う。
-- CloudflareのWorker・Assets・ContainerはTerraformの対象に混ぜず、Wrangler設定で管理する。
+- CloudflareのWorker・AssetsはWrangler、Render serviceは`render.yaml`で管理し、AWS Terraformへ混ぜない。
 
 ## 5. 保護設定
 
-- mainのRequired checksにFrontend、Backend、E2Eを登録する。
+- mainのRequired checksにFrontend、Backend、Cloudflare、E2Eを登録する。
 - force push、branch deletion、未レビューmergeを禁止する。
 - Dependabot等の更新も通常PRとして全テストを通す。

@@ -15,6 +15,7 @@ export interface AuthSessionBridge {
   getAccessToken: () => string | null;
   refreshAccessToken: () => Promise<string>;
   onSessionExpired: () => void;
+  onBackendUnavailable?: () => void;
 }
 
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
@@ -39,6 +40,15 @@ function notifySessionExpiredOnce(): void {
   authSessionBridge?.onSessionExpired();
 }
 
+function notifyBackendUnavailable(error: AxiosError): void {
+  if (
+    error.response?.status === 503 &&
+    error.response.headers['x-fieldflow-backend-state'] === 'starting'
+  ) {
+    authSessionBridge?.onBackendUnavailable?.();
+  }
+}
+
 // Login・Refresh・Logoutは401の自動Refresh対象にしない。再帰的なRefreshを防ぐ専用Client。
 export const authHttpClient = axios.create({
   baseURL: apiBaseUrl,
@@ -52,6 +62,15 @@ export const apiHttpClient = axios.create({
   withCredentials: true,
   headers: { Accept: 'application/json' },
 });
+
+// LoginやRefresh中にもRenderが再起動し得るため、認証専用Clientでも起動待ち画面を再表示する。
+authHttpClient.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    notifyBackendUnavailable(error);
+    return Promise.reject(toApiError(error));
+  },
+);
 
 apiHttpClient.interceptors.request.use((config) => {
   const accessToken = authSessionBridge?.getAccessToken();
@@ -71,6 +90,7 @@ apiHttpClient.interceptors.request.use((config) => {
 apiHttpClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    notifyBackendUnavailable(error);
     const originalRequest = error.config as RetryableRequestConfig | undefined;
 
     if (error.response?.status === 401 && originalRequest?._authRetry) {

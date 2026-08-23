@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "fieldflow",
+  "main": "./src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    // Render Blueprintのservice名と揃える。実際の発行URLが異なる場合はデプロイ前に更新する。
+    "RENDER_BACKEND_ORIGIN": "https://fieldflow-api-l94x.onrender.com"
+  },
+  "assets": {
+    "directory": "../frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // APIだけ無料枠Workerを先に通し、Vueの静的ファイルはCloudflare edgeから直接返す。
+    "run_worker_first": ["/api", "/api/*"]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "port": 8787
+  }
+}

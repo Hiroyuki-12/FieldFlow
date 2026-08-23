@@ -15,7 +15,7 @@ FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーショ�
 | --- | --- | --- | --- | --- | --- |
 | ローカル開発 | 実装・手動確認 | Vite `5173` | NestJS `8080` | Docker Compose MySQL 8.4 | 開発者が必要時に起動 |
 | CI | 自動回帰検証 | Vite build / Playwright | buildしたNestJS | Service MySQL / Testcontainers MySQL 8.4 | Workflowごとに作成・破棄 |
-| Cloudflare公開 | コンテスト審査・長期ポートフォリオ | Workers Static Assets + Worker | Cloudflare Containers | Aiven for MySQL 8.4 | URLは公開し、Containerは低アクセス時にスリープ |
+| Cloudflare公開 | コンテスト審査・長期ポートフォリオ | Workers Static Assets + Workers Free | Render Free Web Service | Aiven for MySQL 8.4 | URLは公開し、Renderは15分idleでスリープ |
 | AWS課題提出 | 中級編課題・実務構成検証 | CloudFront + S3 | ALB + ECS Fargate | RDS MySQL 8.4 | 課題提出・検証期間に構築し、終了後は費用を確認して停止・削除 |
 
 Cloudflare公開環境とAWS課題提出環境は、どちらもBackendの`NODE_ENV=production`を使用する。`production`はNode.jsの実行モードを表し、デプロイ先を識別する名前としては使用しない。
@@ -23,7 +23,7 @@ Cloudflare公開環境とAWS課題提出環境は、どちらもBackendの`NODE_
 ## 3. 共通に維持する設計
 
 - Vueは`VITE_API_BASE_URL=/api/v1`を使用し、画面とAPIを同一オリジンから公開する。
-- NestJSはport `8080`で待ち受け、同じController、Service、Guard、Filter、ログ設計を使用する。
+- NestJSはローカル・AWSでport `8080`、Renderでplatform指定portを待ち受け、同じController、Service、Guard、Filter、ログ設計を使用する。
 - DBはMySQL 8.4とし、TypeORMの`synchronize`を全環境で無効にする。
 - スキーマ変更はレビュー済みMigrationだけで適用する。
 - パスワードはArgon2id、認証はJWT Access TokenとローテーションするRefresh Tokenを使用する。
@@ -34,13 +34,13 @@ Cloudflare公開環境とAWS課題提出環境は、どちらもBackendの`NODE_
 
 | 関心事 | Cloudflare公開環境 | AWS課題提出環境 |
 | --- | --- | --- |
-| 秘密値 | Cloudflare SecretsからContainerへ注入 | SSM SecureStringからECSへ注入 |
+| 秘密値 | Proxy共有鍵はCloudflare Secret、DB・JWT・TLSはRender Secret | SSM SecureStringからECSへ注入 |
 | DB通信 | AivenへTLSで接続 | Security Group内でRDSへ接続 |
 | Migration | 承認付きの一回限り処理でAivenへ適用 | 新イメージの一回限りECSタスクでRDSへ適用 |
-| ログ | Workers / Containers LogsとAivenメトリクス | CloudWatch LogsとAWSメトリクス |
-| スケール | 最大Instance数を制限し、アイドル時にスリープ | ECS desired count 1を維持 |
-| 復旧 | Aivenバックアップと再デプロイ | RDSバックアップとECS再デプロイ |
-| IaC | Wrangler設定をGit管理し、秘密値は除外 | TerraformをGit管理し、stateと秘密値は除外 |
+| ログ | Workers Logs、Render Logs、Aiven metrics | CloudWatch LogsとAWSメトリクス |
+| スケール | Render Free 1 instance、15分idleでスリープ | ECS desired count 1を維持 |
+| 復旧 | Render rollback、Aiven backup、再deploy | RDS backupとECS再deploy |
+| IaC | Wranglerと`render.yaml`をGit管理し、秘密値は除外 | TerraformをGit管理し、stateと秘密値は除外 |
 
 ## 5. デプロイ順序
 
@@ -57,16 +57,16 @@ Cloudflare公開環境とAWS課題提出環境は、どちらもBackendの`NODE_
 
 ## 6. 費用方針
 
-- Cloudflare公開環境は長期公開を前提とし、Containerの最大Instance数とスリープ時間を制限する。ContainersにはWorkers Paidプランが必要であり、2026年8月時点では月額5 USDの基本料金を予算に含める。
-- Aivenは無料枠から開始する。2026年8月時点の1 GB disk、最大76接続、休止条件、SLA対象外という制限を実装時と定期運用時に再確認する。
-- Workers Paidの5 USDは課金上限ではないため、Container、Durable Objects、ログ、通信量の利用量も確認する。
+- Cloudflare公開環境はWorkers Static Assets、Workers Free、Render Free、Aiven Freeから開始し、月額固定費0 USDを前提にする。
+- Workers Freeは100,000 requests/day、Render Freeは750 instance hours/month・15分idle停止・outbound/build/bandwidth枠がある。上限超過時の停止条件を確認する。
+- Aivenは1 GB disk、最大76接続、休止条件、SLA対象外という制限を定期的に再確認する。
 - AWS課題提出環境はTerraform planで作成対象を確認し、AWS Budgetsも設定する。
 - AWS環境は審査・課題レビューに必要な期間を確認してから停止・削除する。URLが必要な期間に独断で破棄しない。
 - 料金・無料枠は変更されるため、金額をコード上の保証値として扱わない。
 
 ## 7. 関連資料
 
-- [Cloudflare・Aiven構成](cloudflare-architecture.md)
+- [Cloudflare・Render・Aiven構成](cloudflare-architecture.md)
 - [AWS・Terraform構成](aws-architecture.md)
 - [アプリケーション構成・技術スタック](application-architecture.md)
 - [DB設計・ER図](database.md)

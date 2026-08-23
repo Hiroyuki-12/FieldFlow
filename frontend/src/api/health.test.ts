@@ -17,9 +17,14 @@ describe('getHealth', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(getHealth()).resolves.toEqual({ status: 'ok' });
-    expect(fetchMock).toHaveBeenCalledWith('/api/health', {
-      headers: { Accept: 'application/json' },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/health',
+      expect.objectContaining({
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+        signal: expect.any(AbortSignal),
+      }),
+    );
   });
 
   it('Backendが異常な場合は画面で扱えるErrorに変換する', async () => {

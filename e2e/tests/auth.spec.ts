@@ -77,7 +77,7 @@ test("E2E-AUTH-01 仮パスワードを変更し、新しいパスワードで�
     password: credentials.firstChangedPassword,
   });
   await expect(
-    page.getByRole("heading", { name: /おはようございます/ }),
+    page.getByRole("heading", { name: /さん、準備を始めましょう。/ }),
   ).toBeVisible();
 });
 
@@ -86,7 +86,7 @@ test("E2E-AUTH-02 Refresh後にログアウトすると保護画面へ戻れな�
 }) => {
   await loginThroughUi(page, credentials.worker);
   await expect(
-    page.getByRole("heading", { name: /おはようございます/ }),
+    page.getByRole("heading", { name: /さん、準備を始めましょう。/ }),
   ).toBeVisible();
 
   const refreshResponse = await page.request.post(

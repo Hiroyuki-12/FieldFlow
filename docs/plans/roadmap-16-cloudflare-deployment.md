@@ -121,3 +121,12 @@ Migration失敗時はRenderをdeployしない。Render healthを確認してか�
 4. Render cold start中にhealthだけを自動再試行し、業務POSTを無条件再送しない理由は何か。
 5. MigrationをRender起動から分離する理由は何か。
 6. Cloudflare・Render・Aiven公開環境とAWS課題提出環境を分ける理由は何か。
+
+## 9. 実施状況（2026-08-23）
+
+- Aiven MySQL 8.4 Free `fieldflow-mysql`を作成し、TLS接続でMigration 2件と初期Seedを適用済み。
+- Render Free Web Service `fieldflow-api`をSingaporeへ作成し、Docker build、環境変数、health check、Aiven接続を確認済み。
+- Cloudflare Worker `fieldflow`へVue Static Assetsと`/api/*` proxyをデプロイ済み。
+- 公開URLは`https://fieldflow.fieldflow-portfolio.workers.dev`。
+- `/`と`/tools`は200、Worker経由`/api/health`は200、認証なし業務APIは401、Render直業務APIは403を確認済み。
+- 残作業は、初期管理者の初回パスワード変更、Login／Refresh／Logout、管理画面、日別表、実コールドスタート表示、Aivenデータ保持の利用者操作smoke確認。

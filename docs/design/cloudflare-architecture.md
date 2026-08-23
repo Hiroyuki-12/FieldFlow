@@ -13,7 +13,7 @@ flowchart TD
     U[利用者のBrowser]
 
     subgraph CF[Cloudflare Workers Free]
-        ORIGIN[公開Origin<br/>fieldflow Workers URL]
+        ORIGIN[公開Origin<br/>fieldflow.fieldflow-portfolio.workers.dev]
         ASSET[Workers Static Assets<br/>Vue dist / SPA fallback]
         WORKER[Worker ingress<br/>/api/* routing]
         CFSECRET[Cloudflare Secret<br/>Render proxy共有鍵]
@@ -21,7 +21,7 @@ flowchart TD
     end
 
     subgraph RENDER[Render Free Web Service / Singapore]
-        REDGE[Render HTTPS edge]
+        REDGE[Render HTTPS edge<br/>fieldflow-api-l94x.onrender.com]
         API[NestJS Docker container<br/>dynamic PORT / non-root]
         RSECRET[Render Secrets<br/>DB / TLS CA / JWT / proxy共有鍵]
         RLOG[Render Logs]

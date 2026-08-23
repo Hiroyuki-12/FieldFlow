@@ -137,6 +137,8 @@ deploy出力でCloudflare公開URLを確認し、そのOriginがRenderの`CORS_O
 
 ## 8. 公開smoke確認
 
+公開Originは`https://fieldflow.fieldflow-portfolio.workers.dev`、内部接続先のRender Originは`https://fieldflow-api-l94x.onrender.com`である。ブラウザやFrontend設定からRender Originを直接利用しない。
+
 低頻度で次の順に確認する。
 
 1. `/`がVueを返す

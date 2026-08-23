@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
     // Render Blueprintのservice名と揃える。実際の発行URLが異なる場合はデプロイ前に更新する。
-    "RENDER_BACKEND_ORIGIN": "https://fieldflow-api.onrender.com"
+    "RENDER_BACKEND_ORIGIN": "https://fieldflow-api-l94x.onrender.com"
   },
   "assets": {
     "directory": "../frontend/dist",

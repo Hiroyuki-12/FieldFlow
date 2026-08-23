@@ -8,12 +8,14 @@ FieldFlowは、同じVue・NestJS・TypeORM・MySQL 8.4のアプリケーショ�
 
 | 環境 | 目的 | 構成 | 状態 |
 | --- | --- | --- | --- |
-| Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Workers Free + Render Free + Aiven MySQL 8.4 | ロードマップ16を実装中（Aiven作成済み・未デプロイ） |
+| Cloudflare公開環境 | コンテスト審査・転職用ポートフォリオの長期公開 | Workers Static Assets + Workers Free + Render Free + Aiven MySQL 8.4 | 基盤公開・疎通確認済み（利用者操作smoke確認中） |
 | AWS課題提出環境 | AIエンジニアコース中級編の課題提出・実務構成検証 | S3 + CloudFront + ALB + ECS Fargate + RDS MySQL 8.4 + Terraform | ロードマップ17で実装予定 |
 
 Cloudflareを画面とAPIの単一公開Originにし、`/api/*`だけをRender FreeのNestJSへproxyします。Renderは15分間アクセスがないと停止し、再起動に約1分かかる場合があるため、その間はVueが起動待ち画面を表示してhealthを自動再試行します。Workers Static Assets、Workers Free、Render Free、Aiven MySQL Freeから開始し、各無料枠と停止通知を確認します。AWS環境は学習・課題レビューに必要な期間だけ別途構築します。詳細は[Cloudflare・Render・Aiven公開構成](docs/design/cloudflare-architecture.md)を参照してください。
 
-公開URLとデモアカウントは、ロードマップ16のデプロイと安全確認が完了してから追記します。実際の秘密値や管理用認証情報はREADMEへ記載しません。
+公開URL: [https://fieldflow.fieldflow-portfolio.workers.dev](https://fieldflow.fieldflow-portfolio.workers.dev)
+
+公開URLの`/`とSPA直リンク、Worker経由の`/api/health`は200を確認済みです。Renderの業務APIは共有鍵なしの直接アクセスを403で拒否します。デモアカウントは初回パスワード変更と利用者操作smoke確認後に案内し、実際の秘密値や管理用認証情報はREADMEへ記載しません。
 
 ## 必要な環境
 

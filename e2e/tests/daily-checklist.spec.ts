@@ -1,11 +1,16 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { credentials, loginThroughUi } from "../fixtures/auth.ts";
 import { addDays, todayInTokyo } from "../support/date.ts";
 
-async function waitForSaved(input: Locator): Promise<void> {
-  const row = input.locator("xpath=ancestor::li");
-  await expect(row.getByText("保存済み")).toBeVisible();
+async function waitForSaved(page: Page, input: Locator): Promise<void> {
+  // 正常状態は画面全体へ集約し、各道具で「保存済み」が反復する回帰を防ぐ。
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "すべて保存済み",
+  );
+  await expect(
+    input.locator("xpath=ancestor::li").getByText("保存済み", { exact: true }),
+  ).toHaveCount(0);
 }
 
 test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更・削除・再作成できる", async ({
@@ -41,17 +46,28 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "確認が必要" })).toBeVisible();
   await expect(page.getByText("数量未設定 2カテゴリ")).toBeVisible();
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "すべて保存済み",
+  );
+  await expect(
+    page.getByText("持ち出し対象外", { exact: true }).first(),
+  ).toBeVisible();
 
   const testerQuantity = page.getByRole("spinbutton", {
     name: "E2E テスターの持ち出し数",
   });
   await testerQuantity.fill("2");
   await testerQuantity.press("Tab");
-  await waitForSaved(testerQuantity);
+  await waitForSaved(page, testerQuantity);
+  await expect(
+    testerQuantity.locator("xpath=ancestor::li").getByText("未準備", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await page
     .getByRole("checkbox", { name: "E2E テスターを準備済みにする" })
     .check();
-  await waitForSaved(testerQuantity);
+  await waitForSaved(page, testerQuantity);
   await expect(page.getByRole("heading", { name: "確認が必要" })).toBeVisible();
   await expect(page.getByText("数量未設定 1カテゴリ")).toBeVisible();
 
@@ -61,11 +77,11 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
   });
   await helmetQuantity.fill("1");
   await helmetQuantity.press("Tab");
-  await waitForSaved(helmetQuantity);
+  await waitForSaved(page, helmetQuantity);
   await page
     .getByRole("checkbox", { name: "E2E ヘルメットを準備済みにする" })
     .check();
-  await waitForSaved(helmetQuantity);
+  await waitForSaved(page, helmetQuantity);
   await expect(page.getByRole("heading", { name: "準備完了" })).toBeVisible();
   await expect(page.getByText("数量未設定 0カテゴリ")).toBeVisible();
 
@@ -75,7 +91,7 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
   });
   await wrenchQuantity.fill("1");
   await wrenchQuantity.press("Tab");
-  await waitForSaved(wrenchQuantity);
+  await waitForSaved(page, wrenchQuantity);
   await page.getByRole("button", { name: "午前" }).click();
   await expect(testerQuantity).toHaveValue("2");
   await expect(
@@ -121,10 +137,30 @@ test("E2E-CHECK-01/02/04/05 日別表を作成・自動保存・追加・変更�
     page.getByText("1日通し", { exact: true }).first(),
   ).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "この日のチェック表を削除する" })
-    .click();
-  const deleteDialog = page.getByRole("dialog", {
+  const otherActions = page.getByRole("button", { name: "その他の操作" });
+  await expect(otherActions).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    page.getByRole("button", { name: "この日のチェック表を削除する" }),
+  ).toBeHidden();
+  await otherActions.click();
+  await expect(otherActions).toHaveAttribute("aria-expanded", "true");
+  const openDelete = page.getByRole("button", {
+    name: "この日のチェック表を削除する",
+  });
+  await openDelete.click();
+  let deleteDialog = page.getByRole("dialog", {
+    name: "この日のチェック表を削除しますか？",
+  });
+  await expect(deleteDialog).toContainText(todayInTokyo().slice(8));
+  await expect(
+    deleteDialog.getByRole("button", { name: "キャンセル" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(deleteDialog).toBeHidden();
+  await expect(openDelete).toBeFocused();
+
+  await openDelete.click();
+  deleteDialog = page.getByRole("dialog", {
     name: "この日のチェック表を削除しますか？",
   });
   await deleteDialog.getByRole("button", { name: "削除する" }).click();

@@ -1,10 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/vue';
+import { fireEvent, render, screen, waitFor } from '@testing-library/vue';
 import { http, HttpResponse } from 'msw';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -133,6 +128,90 @@ describe('DailyChecklistView', () => {
       'aria-expanded',
       'true',
     );
+  });
+
+  it('通常の保存完了は画面全体へ1件だけ表示し、数量0を持ち出し対象外として示す', async () => {
+    server.use(
+      http.get('*/api/v1/daily-checklists/2026-08-18', () =>
+        HttpResponse.json(splitChecklist('2026-08-18')),
+      ),
+    );
+    await renderChecklist('2026-08-18');
+
+    await screen.findByText('ほうき');
+    // 各行から同じ「保存済み」を除き、一覧とスクリーンリーダーの反復通知を防ぐ。
+    expect(screen.getAllByText('すべて保存済み')).toHaveLength(1);
+    expect(
+      screen.queryByText('保存済み', { exact: true }),
+    ).not.toBeInTheDocument();
+
+    const excludedCheckbox = screen.getByRole('checkbox', {
+      name: '手袋は持ち出し対象外',
+    });
+    expect(excludedCheckbox).toBeDisabled();
+    expect(screen.getByText('持ち出し対象外')).toBeInTheDocument();
+    expect(screen.getByText('準備済み')).toBeInTheDocument();
+    expect(screen.queryByText('未準備')).not.toBeInTheDocument();
+  });
+
+  it('数量の0と1を行き来すると、対象外・未準備を切り替えて準備済みを解除する', async () => {
+    server.use(
+      http.get(`*/api/v1/daily-checklists/${today}`, () =>
+        HttpResponse.json(splitChecklist(today)),
+      ),
+      http.patch(
+        `*/api/v1/daily-checklists/${today}/periods/MORNING/items/common-item`,
+        async ({ request }) => {
+          const body = (await request.json()) as {
+            takeoutQuantity: number;
+            checked: boolean;
+            version: number;
+          };
+          return HttpResponse.json({
+            ...splitChecklist(today).periods[0].items[1],
+            ...body,
+            version: body.version + 1,
+            updatedAt: '2026-08-19T00:00:00.000Z',
+          });
+        },
+      ),
+    );
+    await renderChecklist(today);
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: '手袋を1増やす' }),
+    );
+    expect(
+      screen.getByRole('checkbox', { name: '手袋を準備済みにする' }),
+    ).toBeEnabled();
+    expect(screen.getByText('未準備')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+        'すべて保存済み',
+      ),
+    );
+
+    await fireEvent.click(
+      screen.getByRole('checkbox', { name: '手袋を準備済みにする' }),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByText('準備済み')).toHaveLength(2),
+    );
+    await waitFor(() =>
+      expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+        'すべて保存済み',
+      ),
+    );
+
+    await fireEvent.change(screen.getByLabelText('手袋の持ち出し数'), {
+      target: { value: '0' },
+    });
+    const excludedCheckbox = screen.getByRole('checkbox', {
+      name: '手袋は持ち出し対象外',
+    });
+    expect(excludedCheckbox).toBeDisabled();
+    expect(excludedCheckbox).not.toBeChecked();
+    expect(screen.getByText('持ち出し対象外')).toBeInTheDocument();
   });
 
   it('午前・午後を切り替えて独立したカテゴリと道具を表示する', async () => {
@@ -423,6 +502,12 @@ describe('DailyChecklistView', () => {
       await screen.findByRole('button', { name: 'ほうきを1増やす' }),
     );
 
+    // 通信中だけ行へ状態を出し、正常時の反復表示へ戻らないことを固定する。
+    expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+      '変更を保存中…',
+    );
+    expect(screen.getByText('保存中…')).toBeInTheDocument();
+
     await waitFor(() =>
       expect(receivedBody).toEqual({
         takeoutQuantity: 3,
@@ -437,8 +522,13 @@ describe('DailyChecklistView', () => {
 
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(3);
     await waitFor(() =>
-      expect(screen.getAllByText('保存済み')).toHaveLength(2),
+      expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+        'すべて保存済み',
+      ),
     );
+    expect(
+      screen.queryByText('保存済み', { exact: true }),
+    ).not.toBeInTheDocument();
     expect(categoryButton).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -486,7 +576,10 @@ describe('DailyChecklistView', () => {
     expect(categoryButton).toHaveAttribute('aria-expanded', 'false');
     releaseFailedRequest();
 
-    expect(await screen.findByText('保存失敗')).toBeInTheDocument();
+    expect(
+      await screen.findByText('保存できていない変更があります'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('保存失敗：')).toBeInTheDocument();
     expect(categoryButton).toHaveAttribute('aria-expanded', 'true');
     expect(categoryButton).toHaveTextContent('保存失敗あり');
     await fireEvent.click(screen.getByRole('button', { name: '再試行' }));
@@ -496,6 +589,11 @@ describe('DailyChecklistView', () => {
     expect(
       screen.queryByRole('button', { name: '再試行' }),
     ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+        'すべて保存済み',
+      ),
+    );
   });
 
   it('同じ行への連続変更を直列化し、先の応答versionで次を保存する', async () => {
@@ -599,6 +697,14 @@ describe('DailyChecklistView', () => {
     );
     await renderChecklist(today);
 
+    // 別道具の入力エラーを残し、競合が保存失敗より優先されることを確認する。
+    await fireEvent.change(await screen.findByLabelText('手袋の持ち出し数'), {
+      target: { value: '11' },
+    });
+    expect(screen.getByLabelText('自動保存の状態')).toHaveTextContent(
+      '保存できていない変更があります',
+    );
+
     await fireEvent.click(
       await screen.findByRole('button', { name: 'ほうきを1増やす' }),
     );
@@ -609,7 +715,7 @@ describe('DailyChecklistView', () => {
     releaseConflictRequest();
 
     expect(
-      await screen.findByText(/ほうきは他のユーザーが更新しました/),
+      await screen.findByText('他のユーザーによる更新を確認してください'),
     ).toBeInTheDocument();
     expect(
       screen.getByText('⚠ 他のユーザーが更新したため、最新値へ戻しました。'),
@@ -619,9 +725,6 @@ describe('DailyChecklistView', () => {
     expect(categoryButton).toHaveTextContent('競合あり');
     expect(screen.getByLabelText('ほうきの持ち出し数')).toHaveValue(1);
     expect(screen.getByLabelText('手袋の持ち出し数')).toHaveValue(0);
-    expect(
-      screen.queryByRole('button', { name: '再試行' }),
-    ).not.toBeInTheDocument();
 
     await fireEvent.click(
       screen.getByRole('button', { name: 'ほうきの競合メッセージを閉じる' }),
@@ -762,16 +865,49 @@ describe('DailyChecklistView', () => {
     );
     await renderChecklist(today);
 
+    const settings = await screen.findByRole('region', {
+      name: 'チェック表の設定',
+    });
+    expect(
+      screen.getByRole('button', { name: '作業カテゴリを追加' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: '時間帯・作業内容を変更する' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'この日のチェック表を削除する' }),
+    ).not.toBeInTheDocument();
+
+    // 破壊的操作を通常操作から分け、開いたときだけ到達できる構造を固定する。
+    const otherActions = screen.getByRole('button', { name: 'その他の操作' });
+    expect(otherActions).toHaveAttribute('aria-expanded', 'false');
+    expect(otherActions).toHaveAttribute(
+      'aria-controls',
+      'daily-checklist-danger-actions',
+    );
+    await fireEvent.click(otherActions);
+    expect(otherActions).toHaveAttribute('aria-expanded', 'true');
+    expect(settings).toHaveTextContent('危険な操作');
+
     await fireEvent.click(
-      await screen.findByRole('button', {
+      screen.getByRole('button', {
         name: 'この日のチェック表を削除する',
       }),
     );
+    const deleteDialog = screen.getByRole('dialog', {
+      name: 'この日のチェック表を削除しますか？',
+    });
     expect(
       screen.getByRole('heading', {
         name: 'この日のチェック表を削除しますか？',
       }),
     ).toBeInTheDocument();
+    expect(deleteDialog).toHaveTextContent(
+      `${Number(today.slice(5, 7))}月${Number(today.slice(8, 10))}日`,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'キャンセル' })).toHaveFocus(),
+    );
     await fireEvent.click(screen.getByRole('button', { name: '削除する' }));
 
     expect(
@@ -787,5 +923,55 @@ describe('DailyChecklistView', () => {
       version: 1,
       confirmDataLoss: true,
     });
+  });
+
+  it('削除のキャンセルとEscapeを受け付け、失敗時は二重送信せず確認画面を残す', async () => {
+    let requestCount = 0;
+    let releaseDelete!: () => void;
+    const deletePaused = new Promise<void>((resolve) => {
+      releaseDelete = resolve;
+    });
+    server.use(
+      http.get(`*/api/v1/daily-checklists/${today}`, () =>
+        HttpResponse.json(splitChecklist(today)),
+      ),
+      http.delete(`*/api/v1/daily-checklists/${today}`, async () => {
+        requestCount += 1;
+        await deletePaused;
+        return HttpResponse.json({ message: 'delete failed' }, { status: 500 });
+      }),
+    );
+    await renderChecklist(today);
+
+    await fireEvent.click(
+      await screen.findByRole('button', { name: 'その他の操作' }),
+    );
+    const openDelete = screen.getByRole('button', {
+      name: 'この日のチェック表を削除する',
+    });
+    await fireEvent.click(openDelete);
+    await fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(requestCount).toBe(0);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await fireEvent.click(openDelete);
+    let dialog = screen.getByRole('dialog');
+    await fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await fireEvent.click(openDelete);
+    dialog = screen.getByRole('dialog');
+    const deleteButton = screen.getByRole('button', { name: '削除する' });
+    await fireEvent.click(deleteButton);
+    await waitFor(() => expect(requestCount).toBe(1));
+    expect(deleteButton).toBeDisabled();
+    await fireEvent.click(deleteButton);
+    expect(requestCount).toBe(1);
+    releaseDelete();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '処理を完了できませんでした。もう一度お試しください。',
+    );
+    expect(dialog).toHaveAttribute('open');
   });
 });

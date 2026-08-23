@@ -35,6 +35,7 @@ const {
   trapFocus: trapDeleteDialogFocus,
 } = useModalDialog();
 const settingsExpanded = ref(false);
+const dangerActionsExpanded = ref(false);
 const isDeleting = ref(false);
 const deleteErrorMessage = ref('');
 const errorMessage = ref('');
@@ -171,16 +172,49 @@ const hasPendingItemSaves = computed(() =>
       state.status !== 'saved' || state.running || state.pending !== null,
   ),
 );
-const conflictedItemNames = computed(() =>
-  (currentPeriod.value?.items ?? [])
-    .filter((item) => itemSaveStates.value[item.id]?.conflict)
-    .map((item) => item.toolName),
-);
-const conflictSummary = computed(() => {
-  if (conflictedItemNames.value.length === 0) return '';
-  if (conflictedItemNames.value.length === 1)
-    return `${conflictedItemNames.value[0]}は他のユーザーが更新しました。最新の値へ戻しました。`;
-  return `${conflictedItemNames.value.join('、')}は他のユーザーが更新しました。各道具の最新値を確認してください。`;
+// 通常時の「保存済み」はここへ集約し、対応が必要な競合・失敗ほど先に知らせる。
+// pendingも保存待ちの変更なので、通信開始前の一瞬を「すべて保存済み」と誤表示しない。
+const globalSaveStatus = computed(() => {
+  const states = Object.values(itemSaveStates.value);
+  if (states.some((state) => state.conflict)) {
+    return {
+      label: '他のユーザーによる更新を確認してください',
+      icon: '⚠',
+      tone: 'conflict' as const,
+      role: 'alert' as const,
+      live: 'assertive' as const,
+    };
+  }
+  if (states.some((state) => state.status === 'failed')) {
+    return {
+      label: '保存できていない変更があります',
+      icon: '!',
+      tone: 'failed' as const,
+      role: 'alert' as const,
+      live: 'assertive' as const,
+    };
+  }
+  if (
+    states.some(
+      (state) =>
+        state.status === 'saving' || state.running || state.pending !== null,
+    )
+  ) {
+    return {
+      label: '変更を保存中…',
+      icon: '↻',
+      tone: 'saving' as const,
+      role: 'status' as const,
+      live: 'polite' as const,
+    };
+  }
+  return {
+    label: 'すべて保存済み',
+    icon: '✓',
+    tone: 'saved' as const,
+    role: 'status' as const,
+    live: 'polite' as const,
+  };
 });
 
 watch(
@@ -195,7 +229,7 @@ watch(
 
 watch(deleteDialogOpen, async (open) => {
   if (open) {
-    await openDeleteModal('button');
+    await openDeleteModal('[data-delete-cancel]');
   } else closeDeleteModal();
 });
 
@@ -205,6 +239,7 @@ async function loadChecklist(): Promise<void> {
   errorMessage.value = '';
   noticeMessage.value = '';
   itemSaveStates.value = {};
+  dangerActionsExpanded.value = false;
   resetCategoryExpansionStates();
   checklist.value = null;
   try {
@@ -272,6 +307,8 @@ function handleCategoriesAdded(saved: DailyChecklist): void {
 }
 
 function openDeleteDialog(): void {
+  // 保存待ち・失敗がある間は、入力を失う削除へ進ませない既存の安全策を関数側でも保証する。
+  if (hasPendingItemSaves.value) return;
   deleteErrorMessage.value = '';
   deleteDialogOpen.value = true;
 }
@@ -417,6 +454,21 @@ function categoryProgressLabel(
     : `準備 ${group.prepared} / ${group.selectedCount}・${group.progress}%`;
 }
 
+function preparationLabel(takeoutQuantity: number, checked: boolean): string {
+  if (takeoutQuantity === 0) return '持ち出し対象外';
+  return checked ? '準備済み' : '未準備';
+}
+
+function preparationToneClasses(
+  takeoutQuantity: number,
+  checked: boolean,
+): string {
+  if (takeoutQuantity === 0) return 'bg-[#e8eee9] text-[#49666a]';
+  return checked
+    ? 'bg-[#d8eee8] text-[#24764d]'
+    : 'bg-[#fff0df] text-[#8a4b1f]';
+}
+
 function changeQuantity(item: DailyChecklistItem, quantity: number): void {
   const state = saveStateFor(item.id);
   if (
@@ -522,13 +574,6 @@ function closeConflictNotice(itemId: string): void {
 
 function retryItemSave(item: DailyChecklistItem): void {
   queueItemSave(item);
-}
-
-function saveStatusLabel(itemId: string): string {
-  const status = saveStateFor(itemId).status;
-  if (status === 'saving') return '保存中';
-  if (status === 'failed') return '保存失敗';
-  return '保存済み';
 }
 
 function currentItemFromConflict(error: unknown): DailyChecklistItem | null {
@@ -707,14 +752,6 @@ function deleteMessageFor(error: unknown): string {
     <AppNotice v-if="noticeMessage" class="mt-6" tone="success">
       {{ noticeMessage }}
     </AppNotice>
-    <AppNotice
-      v-if="conflictSummary"
-      class="mt-4"
-      tone="warning"
-      title="他のユーザーによる更新を検出しました"
-    >
-      {{ conflictSummary }} 該当する道具行の内容を確認してください。
-    </AppNotice>
     <p v-if="isLoading" class="mt-8 text-center" role="status">
       日別チェックを読み込み中…
     </p>
@@ -769,7 +806,7 @@ function deleteMessageFor(error: unknown): string {
           <div>
             <h2 class="font-black">チェック表の設定</h2>
             <p class="mt-1 text-sm text-[#49666a]">
-              登録を間違えた場合は、内容の変更またはこの日の表の削除ができます。
+              作業カテゴリの追加や、時間帯・作業内容の変更ができます。
             </p>
           </div>
           <div class="flex flex-col gap-2 sm:flex-row">
@@ -789,8 +826,32 @@ function deleteMessageFor(error: unknown): string {
             >
               時間帯・作業内容を変更する
             </button>
+          </div>
+        </div>
+        <div class="mt-5 border-t border-[#e2e9e5] pt-4">
+          <button
+            class="flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-bold text-[#49666a] hover:bg-[#f3f6f4]"
+            type="button"
+            :aria-expanded="dangerActionsExpanded"
+            aria-controls="daily-checklist-danger-actions"
+            @click="dangerActionsExpanded = !dangerActionsExpanded"
+          >
+            <span aria-hidden="true">{{
+              dangerActionsExpanded ? '▼' : '▶'
+            }}</span>
+            その他の操作
+          </button>
+          <div
+            v-show="dangerActionsExpanded"
+            id="daily-checklist-danger-actions"
+            class="mt-3 rounded-xl border border-[#e1c8c4] bg-[#fffafa] p-4"
+          >
+            <h3 class="font-black text-[#713d38]">危険な操作</h3>
+            <p class="mt-1 text-sm leading-6 text-[#6a5552]">
+              この日の入力内容を画面上から削除します。実行前に対象日と影響をもう一度確認します。
+            </p>
             <button
-              class="min-h-11 rounded-xl border border-[#b44b43] px-4 font-bold text-[#9a3832] disabled:opacity-60"
+              class="mt-3 min-h-11 rounded-xl border border-[#b44b43] px-4 text-sm font-bold text-[#9a3832] disabled:opacity-60"
               type="button"
               :disabled="hasPendingItemSaves"
               @click="openDeleteDialog"
@@ -899,13 +960,35 @@ function deleteMessageFor(error: unknown): string {
         </p>
       </section>
 
-      <p class="mt-5 rounded-xl bg-[#fff0df] p-3 text-sm text-[#7a421e]">
-        {{
-          checklist.editable
-            ? '数量と準備状態は、変更するたびに道具ごとに自動保存します。'
-            : '数量と準備状態は、当時保存された内容を表示しています。'
-        }}
-      </p>
+      <section
+        class="mt-5 rounded-xl bg-[#fff0df] p-3 text-sm text-[#7a421e]"
+        aria-label="自動保存"
+      >
+        <p>
+          {{
+            checklist.editable
+              ? '数量と準備状態は、変更するたびに道具ごとに自動保存します。'
+              : '数量と準備状態は、当時保存された内容を表示しています。'
+          }}
+        </p>
+        <div
+          v-if="checklist.editable"
+          class="mt-2 flex min-w-0 items-center gap-2 rounded-lg px-3 py-2 font-black"
+          :class="{
+            'bg-[#e2f3ed] text-[#176345]': globalSaveStatus.tone === 'saved',
+            'bg-[#fff7d6] text-[#6d5312]': globalSaveStatus.tone === 'saving',
+            'bg-[#fbe4e1] text-[#8d2f2b]': globalSaveStatus.tone === 'failed',
+            'bg-[#ffe9d2] text-[#834214]': globalSaveStatus.tone === 'conflict',
+          }"
+          :role="globalSaveStatus.role"
+          :aria-live="globalSaveStatus.live"
+          aria-atomic="true"
+          aria-label="自動保存の状態"
+        >
+          <span aria-hidden="true">{{ globalSaveStatus.icon }}</span>
+          <span class="min-w-0 break-words">{{ globalSaveStatus.label }}</span>
+        </div>
+      </section>
 
       <div
         v-if="groupedItems.length > 0"
@@ -986,7 +1069,9 @@ function deleteMessageFor(error: unknown): string {
                   : ''
               "
             >
-              <div class="min-w-[7rem] flex-1">
+              <div
+                class="min-w-0 basis-full sm:min-w-[7rem] sm:basis-auto sm:flex-1"
+              >
                 <strong class="break-words">{{ item.toolName }}</strong>
                 <span class="ml-2 text-sm text-[#49666a]"
                   >在庫 {{ item.stockQuantity }}</span
@@ -1032,13 +1117,22 @@ function deleteMessageFor(error: unknown): string {
                   class="ml-auto flex min-w-[6.5rem] flex-col items-end gap-1 sm:ml-0"
                 >
                   <label
-                    class="flex min-h-11 cursor-pointer items-center gap-2 font-bold"
+                    class="flex min-h-11 items-center gap-2 font-bold"
+                    :class="
+                      item.takeoutQuantity === 0
+                        ? 'cursor-not-allowed'
+                        : 'cursor-pointer'
+                    "
                   >
                     <input
                       type="checkbox"
                       :checked="item.checked"
                       :disabled="item.takeoutQuantity === 0"
-                      :aria-label="`${item.toolName}を準備済みにする`"
+                      :aria-label="
+                        item.takeoutQuantity === 0
+                          ? `${item.toolName}は持ち出し対象外`
+                          : `${item.toolName}を準備済みにする`
+                      "
                       @change="
                         changeChecked(
                           item,
@@ -1046,28 +1140,33 @@ function deleteMessageFor(error: unknown): string {
                         )
                       "
                     />
-                    <span>{{ item.checked ? '準備済み' : '未準備' }}</span>
+                    <span
+                      class="w-fit rounded-full px-2 py-1 text-sm font-bold"
+                      :class="
+                        preparationToneClasses(
+                          item.takeoutQuantity,
+                          item.checked,
+                        )
+                      "
+                    >
+                      {{ preparationLabel(item.takeoutQuantity, item.checked) }}
+                    </span>
                   </label>
                   <span
-                    class="text-xs font-bold"
-                    :class="{
-                      'text-[#0b6b62]':
-                        saveStateFor(item.id).status === 'saved',
-                      'text-[#7a421e]':
-                        saveStateFor(item.id).status === 'saving',
-                      'text-[#9a3832]':
-                        saveStateFor(item.id).status === 'failed',
-                    }"
+                    v-if="saveStateFor(item.id).status === 'saving'"
+                    class="text-xs font-bold text-[#7a421e]"
                     role="status"
+                    aria-live="polite"
                   >
-                    {{ saveStatusLabel(item.id) }}
+                    保存中…
                   </span>
                 </div>
                 <div
                   v-if="saveStateFor(item.id).status === 'failed'"
-                  class="basis-full text-right text-xs text-[#9a3832]"
+                  class="min-w-0 basis-full break-words text-left text-xs text-[#9a3832] sm:text-right"
                   role="alert"
                 >
+                  <strong>保存失敗：</strong>
                   <span>{{ saveStateFor(item.id).message }}</span>
                   <button
                     class="ml-2 font-bold underline"
@@ -1089,9 +1188,10 @@ function deleteMessageFor(error: unknown): string {
                     最新値: 数量{{
                       saveStateFor(item.id).conflict?.takeoutQuantity
                     }}・{{
-                      saveStateFor(item.id).conflict?.checked
-                        ? '準備済み'
-                        : '未準備'
+                      preparationLabel(
+                        saveStateFor(item.id).conflict?.takeoutQuantity ?? 0,
+                        saveStateFor(item.id).conflict?.checked ?? false,
+                      )
                     }}
                   </span>
                   <span
@@ -1114,12 +1214,10 @@ function deleteMessageFor(error: unknown): string {
                 <span
                   class="w-fit rounded-full px-3 py-1 text-sm font-bold"
                   :class="
-                    item.checked
-                      ? 'bg-[#d8eee8] text-[#24764d]'
-                      : 'bg-[#e8eee9] text-[#49666a]'
+                    preparationToneClasses(item.takeoutQuantity, item.checked)
                   "
                 >
-                  {{ item.checked ? '準備済み' : '未準備' }}
+                  {{ preparationLabel(item.takeoutQuantity, item.checked) }}
                 </span>
               </template>
             </li>
@@ -1162,12 +1260,12 @@ function deleteMessageFor(error: unknown): string {
 
     <dialog
       ref="deleteDialog"
-      class="app-dialog w-[min(92vw,32rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl"
+      class="app-dialog flex-col w-[min(92vw,32rem)] rounded-3xl border-0 bg-white p-0 text-[#102a2e] shadow-2xl open:flex"
       aria-labelledby="delete-checklist-title"
       @cancel.prevent="closeDeleteDialog"
       @keydown="trapDeleteDialogFocus"
     >
-      <section class="p-6 sm:p-7">
+      <section class="app-dialog-body min-h-0 overflow-y-auto p-6 sm:p-7">
         <p class="text-xs font-black tracking-[0.16em] text-[#9a3832]">
           DELETE DAILY CHECK
         </p>
@@ -1191,15 +1289,16 @@ function deleteMessageFor(error: unknown): string {
         </p>
       </section>
       <footer
-        class="app-dialog-actions border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4"
+        class="app-dialog-actions app-dialog-footer shrink-0 border-t border-[#cfdbd5] bg-[#fffdf8] px-6 py-4"
       >
         <button
+          data-delete-cancel
           class="min-h-11 rounded-xl border border-[#aebfba] px-5 font-bold"
           type="button"
           :disabled="isDeleting"
           @click="closeDeleteDialog"
         >
-          戻る
+          キャンセル
         </button>
         <button
           class="min-h-11 rounded-xl bg-[#b44b43] px-5 font-bold text-white disabled:opacity-60"

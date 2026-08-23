@@ -499,3 +499,162 @@ for (const width of [320, 390, 1280] as const) {
     expect(footerBoxAfterScroll!.y).toBe(footerBoxAfterSelection!.y);
   });
 }
+
+test("CHECKLIST-RESPONSIVE 状態・再試行・危険操作が320pxと拡大表示でも操作できる", async ({
+  page,
+}) => {
+  const workDate = addDays(todayInTokyo(), 5);
+  const longToolName =
+    "E2E非常に長い道具名でも数量操作と準備状態に重ならず自然に折り返される安全確認用工具";
+
+  await page.setViewportSize({ width: 320, height: 480 });
+  await loginThroughUi(page, credentials.worker);
+  await page.goto(`/daily-checklists/${workDate}`);
+  const createChecklist = page.getByRole("button", {
+    name: "この日のチェック表を作成",
+  });
+  // 初期GETの完了を待ってから作成し、読込中の一瞬を「既存表あり」と誤判定しない。
+  await expect(createChecklist).toBeVisible();
+  await createChecklist.click();
+  const creationDialog = page.getByRole("dialog", {
+    name: /チェック表を作成/,
+  });
+  await creationDialog.getByLabel("E2E 電気工事").check();
+  await creationDialog
+    .getByRole("button", { name: "チェック表を作成" })
+    .click();
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "すべて保存済み",
+  );
+
+  // 長い道具名をAPI応答へ注入し、実データに依存せず最小幅の折り返しを検証する。
+  await page.route(`**/api/v1/daily-checklists/${workDate}`, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    const payload = (await response.json()) as {
+      periods: Array<{ items: Array<Record<string, unknown>> }>;
+      [key: string]: unknown;
+    };
+    const periods = payload.periods.map((period, periodIndex) => ({
+      ...period,
+      items: period.items.map((item, itemIndex) =>
+        periodIndex === 0 && itemIndex === 0
+          ? {
+              ...item,
+              toolName: longToolName,
+              takeoutQuantity: 0,
+              checked: false,
+            }
+          : item,
+      ),
+    }));
+    await route.fulfill({ response, json: { ...payload, periods } });
+  });
+  await page.reload();
+
+  const quantity = page.getByRole("spinbutton", {
+    name: `${longToolName}の持ち出し数`,
+  });
+  const row = quantity.locator("xpath=ancestor::li");
+  await expect(row.getByText(longToolName, { exact: true })).toBeVisible();
+  await expect(row.getByText("持ち出し対象外", { exact: true })).toBeVisible();
+  await expect(row.getByRole("checkbox")).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+
+  let updateCount = 0;
+  await page.route(
+    `**/api/v1/daily-checklists/${workDate}/periods/*/items/*`,
+    async (route) => {
+      updateCount += 1;
+      if (updateCount === 1) {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ message: "responsive save failure" }),
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+  await quantity.fill("1");
+  await quantity.press("Tab");
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "保存できていない変更があります",
+  );
+  await expect(row.getByRole("button", { name: "再試行" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+
+  await row.getByRole("button", { name: "再試行" }).click();
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "すべて保存済み",
+  );
+  // 保存成功応答でスナップショットの正式名へ戻るため、以降は正式名で行を取り直す。
+  const savedRow = page
+    .getByRole("spinbutton", { name: "E2E テスターの持ち出し数" })
+    .locator("xpath=ancestor::li");
+  await expect(savedRow.getByText("未準備", { exact: true })).toBeVisible();
+  await savedRow.getByRole("checkbox").check();
+  await expect(page.getByLabel("自動保存の状態")).toContainText(
+    "すべて保存済み",
+  );
+  await expect(savedRow.getByText("準備済み", { exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 320, height: 568 });
+  const otherActions = page.getByRole("button", { name: "その他の操作" });
+  await otherActions.scrollIntoViewIfNeeded();
+  await otherActions.click();
+  await expect(otherActions).toHaveAttribute("aria-expanded", "true");
+  const openDelete = page.getByRole("button", {
+    name: "この日のチェック表を削除する",
+  });
+  await expect(openDelete).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openDelete.click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "この日のチェック表を削除しますか？",
+  });
+  await expect(deleteDialog).toContainText(`${Number(workDate.slice(8))}日`);
+  await expect(
+    deleteDialog.getByRole("button", { name: "キャンセル" }),
+  ).toBeVisible();
+  await expect(
+    deleteDialog.getByRole("button", { name: "削除する" }),
+  ).toBeVisible();
+
+  // 文字を約200%へ拡大しても、本文をスクロールして安全な操作へ到達できることを確認する。
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await expect(
+    deleteDialog.getByRole("button", { name: "キャンセル" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(deleteDialog).toBeHidden();
+  await expect(openDelete).toBeFocused();
+
+  // 専用E2E DBへ検証データを残さず、同じテストを繰り返し実行できるようにする。
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "";
+  });
+  await openDelete.click();
+  await page
+    .getByRole("dialog", { name: "この日のチェック表を削除しますか？" })
+    .getByRole("button", { name: "削除する" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "この日のチェック表はありません" }),
+  ).toBeVisible();
+});

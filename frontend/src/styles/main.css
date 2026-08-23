@@ -74,6 +74,16 @@ nav a[aria-current='page'] {
   background: #d8eee8;
 }
 
+/* 紹介文を意味のある2行に保ち、1024px付近でも末尾1〜2文字だけが孤立しない大きさへ追従させる。 */
+.login-hero-heading {
+  font-size: clamp(2.75rem, 4.75vw, 4.5rem);
+}
+
+.login-hero-heading-line {
+  display: block;
+  white-space: nowrap;
+}
+
 .backend-startup-spinner {
   animation: backend-startup-spin 1s linear infinite;
 }

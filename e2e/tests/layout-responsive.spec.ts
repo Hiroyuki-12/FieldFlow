@@ -17,6 +17,150 @@ async function loginAsAdminAtWidth(
   ).toBeVisible();
 }
 
+for (const width of [320, 390, 1024, 1280, 1366] as const) {
+  test(`AUTH-LAYOUT-${width} ログイン画面が収まり、入力エラーから修正を始められる`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width < 500 ? 700 : 900 });
+    await page.goto("/login");
+
+    const loginHeading = page.getByRole("heading", { name: "ログイン" });
+    const loginCard = loginHeading.locator("..");
+    await expect(loginCard).toBeVisible();
+    const cardBox = await loginCard.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(cardBox!.x).toBeGreaterThanOrEqual(0);
+    expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await expect(
+      page.getByText(/Token|Access Token|Refresh Token/),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText("共用端末では、利用後に必ずログアウトしてください。"),
+    ).toBeVisible();
+
+    const introduction = page.getByLabel("FieldFlowの紹介");
+    if (width >= 1024) {
+      await expect(introduction).toBeVisible();
+      const headingLines = introduction.locator("h2 span");
+      await expect(headingLines).toHaveCount(2);
+      await expect(headingLines.nth(0)).toHaveText("忘れ物のない朝を、");
+      await expect(headingLines.nth(1)).toHaveText("チームでつくる。");
+
+      for (let index = 0; index < 2; index += 1) {
+        // 文字Rangeが1行だけなら、末尾1〜2文字が次の行へ孤立していない。
+        expect(
+          await headingLines.nth(index).evaluate((element) => {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            return range.getClientRects().length;
+          }),
+        ).toBe(1);
+      }
+    } else {
+      await expect(introduction).toBeHidden();
+    }
+
+    // 空欄送信後も最初の修正項目と送信操作を見失わないことを保証する。
+    const loginId = page.getByLabel("ログインID");
+    const password = page.getByLabel("パスワード");
+    const submitButton = page.getByRole("button", { name: "ログイン" });
+
+    // エラーがない通常表示では、予約領域が入力欄と主操作を離しすぎないことを実寸で固定する。
+    const loginIdBox = await loginId.boundingBox();
+    const passwordBox = await password.boundingBox();
+    const submitButtonBox = await submitButton.boundingBox();
+    expect(loginIdBox).not.toBeNull();
+    expect(passwordBox).not.toBeNull();
+    expect(submitButtonBox).not.toBeNull();
+    expect(
+      passwordBox!.y - (loginIdBox!.y + loginIdBox!.height),
+    ).toBeLessThanOrEqual(72);
+    expect(
+      submitButtonBox!.y - (passwordBox!.y + passwordBox!.height),
+    ).toBeLessThanOrEqual(48);
+
+    await submitButton.click();
+    await expect(loginId).toBeFocused();
+    await expect(loginId).toHaveAttribute("aria-invalid", "true");
+    await expect(password).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByText(/ログインIDは4〜50文字/)).toBeVisible();
+    await expect(
+      page.getByText("パスワードは12文字以上で入力してください。"),
+    ).toBeVisible();
+    await expect(submitButton).toBeEnabled();
+
+    await loginId.fill("valid.user");
+    await submitButton.click();
+    await expect(password).toBeFocused();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  });
+}
+
+test("AUTH-PASSWORD-LAYOUT-320-390 パスワード変更の注意と入力操作がモバイル幅に収まる", async ({
+  page,
+}) => {
+  // 同じ認証Sessionで2幅を確認し、E2E自体がIP単位のログイン制限を消費しすぎないようにする。
+  await page.setViewportSize({ width: 390, height: 700 });
+  await loginThroughUi(page, credentials.admin);
+  await page.goto("/password");
+
+  const heading = page.getByRole("heading", { name: "パスワード変更" });
+  const card = heading.locator("..");
+  const newPassword = page.getByLabel("新しいパスワード", {
+    exact: true,
+  });
+  const showButton = page.getByRole("button", {
+    name: "新しいパスワードを表示",
+  });
+
+  for (const width of [320, 390] as const) {
+    await page.setViewportSize({ width, height: 700 });
+    await expect(card).toBeVisible();
+    await expect(
+      page.getByText("変更後はすべての端末からログアウトされます。"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("新しいパスワードで再ログインしてください。"),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Token|Access Token|Refresh Token/),
+    ).toHaveCount(0);
+
+    const cardBox = await card.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(cardBox!.x).toBeGreaterThanOrEqual(0);
+    expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(width);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+
+    // 右側余白が表示ボタンより広いことを確認し、入力文字との重なりを防ぐ。
+    const inputPaddingRight = await newPassword.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingRight),
+    );
+    const showButtonBox = await showButton.boundingBox();
+    expect(showButtonBox).not.toBeNull();
+    expect(inputPaddingRight).toBeGreaterThanOrEqual(showButtonBox!.width);
+  }
+
+  await page.getByRole("button", { name: "変更して再ログイン" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "変更して再ログイン" }),
+  ).toBeEnabled();
+});
+
 for (const width of menuWidths) {
   test(`LAYOUT-${width} xl未満は主要操作をハンバーガーへまとめる`, async ({
     page,

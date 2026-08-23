@@ -94,6 +94,18 @@ async function handleLogout(): Promise<void> {
           <span class="text-xl">FieldFlow</span>
         </RouterLink>
 
+        <button
+          ref="mobileMenuButton"
+          type="button"
+          class="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#cfdbd5] bg-white text-xl xl:hidden"
+          :aria-expanded="mobileMenuOpen"
+          aria-controls="mobile-navigation"
+          :aria-label="mobileMenuOpen ? 'メニューを閉じる' : 'メニューを開く'"
+          @click="toggleMobileMenu"
+        >
+          <span aria-hidden="true">{{ mobileMenuOpen ? '×' : '☰' }}</span>
+        </button>
+
         <!-- 管理者用の項目数でも折り返さない幅を確保し、xl未満は一つのメニューへ集約する。 -->
         <nav
           class="ml-6 hidden flex-nowrap items-center gap-1 whitespace-nowrap xl:flex"
@@ -147,18 +159,6 @@ async function handleLogout(): Promise<void> {
             <small class="text-[#6b8285]">{{ roleLabel }}</small>
           </span>
         </div>
-
-        <button
-          ref="mobileMenuButton"
-          type="button"
-          class="ml-auto grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#cfdbd5] bg-white text-xl sm:ml-0 xl:hidden"
-          :aria-expanded="mobileMenuOpen"
-          aria-controls="mobile-navigation"
-          :aria-label="mobileMenuOpen ? 'メニューを閉じる' : 'メニューを開く'"
-          @click="toggleMobileMenu"
-        >
-          <span aria-hidden="true">{{ mobileMenuOpen ? '×' : '☰' }}</span>
-        </button>
       </div>
 
       <nav

@@ -173,6 +173,108 @@ describe('ToolsView', () => {
     ).toBeDisabled();
   });
 
+  it('作成・編集モーダルを固定ヘッダー、スクロール本文、固定操作欄で表示する', async () => {
+    server.use(
+      http.get('*/api/v1/tools', () => HttpResponse.json(listResponse())),
+    );
+
+    renderView('ADMIN');
+    await screen.findByRole('heading', { name: 'モップ' });
+
+    for (const buttonName of ['道具を作成', '編集']) {
+      await fireEvent.click(screen.getByRole('button', { name: buttonName }));
+      const dialog = screen.getByRole('dialog');
+      const form = within(dialog)
+        .getByRole('button', { name: '保存' })
+        .closest('form');
+      expect(dialog.firstElementChild).toHaveClass(
+        'flex',
+        'max-h-[90dvh]',
+        'flex-col',
+      );
+      expect(form?.firstElementChild).toHaveClass('min-h-0', 'overflow-y-auto');
+      expect(
+        within(dialog).getByRole('button', { name: '保存' }).parentElement,
+      ).toHaveClass('shrink-0');
+      await fireEvent.click(
+        within(dialog).getByRole('button', { name: 'キャンセル' }),
+      );
+    }
+  });
+
+  it('ページ移動後に一覧先頭へ戻し、移動前の成功通知を残さない', async () => {
+    server.use(
+      http.get('*/api/v1/tools', ({ request }) => {
+        const requestedPage = Number(
+          new URL(request.url).searchParams.get('page'),
+        );
+        return HttpResponse.json(
+          listResponse({
+            items: [
+              {
+                ...managedTool,
+                id: `tool-${requestedPage}`,
+                name: `モップ ${requestedPage}`,
+              },
+            ],
+            page: requestedPage,
+            total: 41,
+          }),
+        );
+      }),
+    );
+
+    renderView('ADMIN');
+    const heading = await screen.findByRole('heading', { name: 'モップ 1' });
+    const pageSection = heading.closest('section') as HTMLElement;
+    const scrollIntoView = vi.fn();
+    pageSection.scrollIntoView = scrollIntoView;
+
+    await fireEvent.click(screen.getByRole('button', { name: '次へ' }));
+
+    expect(await screen.findByText('2 / 3ページ')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'モップ 2' }),
+    ).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+
+  it('利用停止の成功通知を次の検索操作で解除する', async () => {
+    server.use(
+      http.get('*/api/v1/tools', () => HttpResponse.json(listResponse())),
+      http.patch('*/api/v1/tools/tool-1/status', () =>
+        HttpResponse.json({
+          ...managedTool,
+          status: 'INACTIVE',
+          version: 2,
+        }),
+      ),
+    );
+
+    renderView('ADMIN');
+    await screen.findByRole('heading', { name: 'モップ' });
+    await fireEvent.click(screen.getByRole('button', { name: '利用停止' }));
+    await fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: '利用停止する',
+      }),
+    );
+    expect(
+      await screen.findByText('モップを利用停止しました。'),
+    ).toBeInTheDocument();
+
+    await fireEvent.update(screen.getByLabelText('道具名'), '脚立');
+    const searchButton = screen.getByRole('button', { name: '検索' });
+    await vi.waitFor(() => expect(searchButton).toBeEnabled());
+    await fireEvent.click(searchButton);
+
+    await vi.waitFor(() =>
+      expect(
+        screen.queryByText('モップを利用停止しました。'),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it('名称重複エラーを次の対応が分かる説明へ変換する', async () => {
     server.use(
       http.get('*/api/v1/tools', () => HttpResponse.json(listResponse())),

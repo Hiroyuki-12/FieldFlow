@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
 import { ApiError } from '../api/errors';
 import {
@@ -33,6 +33,7 @@ const errorMessage = ref('');
 const dialogMode = ref<DialogMode>(null);
 const { dialog, openModal, closeModal, trapFocus } = useModalDialog();
 const selectedTool = ref<ManagedTool | null>(null);
+const pageTop = ref<HTMLElement | null>(null);
 const form = ref({
   name: '',
   categoryId: '',
@@ -90,6 +91,8 @@ async function loadTools(): Promise<void> {
 }
 
 async function applyFilters(): Promise<void> {
+  // 前の更新結果は次の検索操作と無関係なため、条件適用時に通知を片付ける。
+  notice.value = '';
   page.value = 1;
   await loadTools();
 }
@@ -97,12 +100,17 @@ async function applyFilters(): Promise<void> {
 async function movePage(nextPage: number): Promise<void> {
   if (nextPage < 1 || nextPage > pageCount.value || nextPage === page.value)
     return;
+  notice.value = '';
   page.value = nextPage;
   await loadTools();
+  await nextTick();
+  // 小さい画面でページ下部に取り残されず、更新後の一覧先頭から確認できるようにする。
+  pageTop.value?.scrollIntoView?.({ block: 'start' });
 }
 
 function openCreate(): void {
   if (!isAdmin.value) return;
+  notice.value = '';
   errorMessage.value = '';
   selectedTool.value = null;
   form.value = {
@@ -116,6 +124,7 @@ function openCreate(): void {
 
 function openEdit(tool: ManagedTool): void {
   if (!isAdmin.value) return;
+  notice.value = '';
   errorMessage.value = '';
   selectedTool.value = tool;
   form.value = {
@@ -129,6 +138,7 @@ function openEdit(tool: ManagedTool): void {
 
 function openStatus(tool: ManagedTool): void {
   if (!isAdmin.value) return;
+  notice.value = '';
   errorMessage.value = '';
   selectedTool.value = tool;
   dialogMode.value = 'status';
@@ -231,11 +241,15 @@ function messageFor(error: unknown): string {
 </script>
 
 <template>
-  <section>
+  <section ref="pageTop">
     <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p class="mb-1 text-sm font-bold text-[#0b6b62]">道具マスター</p>
-        <h1 class="text-3xl font-black tracking-tight" data-page-heading tabindex="-1">
+        <h1
+          class="text-3xl font-black tracking-tight"
+          data-page-heading
+          tabindex="-1"
+        >
           道具管理
         </h1>
         <p class="mt-2 text-sm text-[#49666a]">
@@ -407,92 +421,96 @@ function messageFor(error: unknown): string {
       @cancel.prevent="closeDialog"
       @keydown="trapFocus"
     >
-      <div class="max-h-[90dvh] overflow-y-auto p-6" @keydown.esc="closeDialog">
+      <div class="flex max-h-[90dvh] flex-col" @keydown.esc="closeDialog">
         <h2
           id="tool-dialog-title"
-          class="sticky top-0 z-10 -mx-6 -mt-6 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
+          class="shrink-0 border-b border-[#cfdbd5] bg-white px-6 py-5 text-xl font-black"
         >
           {{ dialogTitle }}
         </h2>
-        <p
-          v-if="errorMessage"
-          id="tool-dialog-error"
-          class="mt-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </p>
         <form
           v-if="dialogMode === 'create' || dialogMode === 'edit'"
-          class="mt-5 space-y-4"
+          class="flex min-h-0 flex-1 flex-col"
           @submit.prevent="saveTool"
         >
-          <label class="block">
-            <span class="mb-1 block font-bold">名前</span>
-            <input
-              v-model="form.name"
-              class="min-h-11 w-full rounded-xl border px-3"
-              maxlength="100"
-              required
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="tool-dialog-error"
-            />
-          </label>
-          <label class="block">
-            <span class="mb-1 block font-bold">作業カテゴリ</span>
-            <select
-              v-model="form.categoryId"
-              class="min-h-11 w-full rounded-xl border px-3"
-              required
-              :aria-invalid="Boolean(errorMessage)"
-              aria-describedby="tool-dialog-error"
+          <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            <p
+              v-if="errorMessage"
+              id="tool-dialog-error"
+              class="rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
+              role="alert"
             >
-              <option value="" disabled>選択してください</option>
-              <option
-                v-for="category in categories"
-                :key="category.id"
-                :value="category.id"
-                :disabled="category.status === 'INACTIVE'"
+              {{ errorMessage }}
+            </p>
+            <label class="block">
+              <span class="mb-1 block font-bold">名前</span>
+              <input
+                v-model="form.name"
+                class="min-h-11 w-full rounded-xl border px-3"
+                maxlength="100"
+                required
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="tool-dialog-error"
+              />
+            </label>
+            <label class="block">
+              <span class="mb-1 block font-bold">作業カテゴリ</span>
+              <select
+                v-model="form.categoryId"
+                class="min-h-11 w-full rounded-xl border px-3"
+                required
+                :aria-invalid="Boolean(errorMessage)"
+                aria-describedby="tool-dialog-error"
               >
-                {{ category.name
-                }}{{ category.status === 'INACTIVE' ? '（停止中）' : '' }}
-              </option>
-            </select>
-          </label>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <label class="block">
-              <span class="mb-1 block font-bold">保有数</span>
-              <input
-                v-model.number="form.stockQuantity"
-                class="min-h-11 w-full rounded-xl border px-3"
-                type="number"
-                min="0"
-                max="9999"
-                step="1"
-                required
-                :aria-invalid="Boolean(errorMessage)"
-                aria-describedby="tool-dialog-error"
-              />
+                <option value="" disabled>選択してください</option>
+                <option
+                  v-for="category in categories"
+                  :key="category.id"
+                  :value="category.id"
+                  :disabled="category.status === 'INACTIVE'"
+                >
+                  {{ category.name
+                  }}{{ category.status === 'INACTIVE' ? '（停止中）' : '' }}
+                </option>
+              </select>
             </label>
-            <label class="block">
-              <span class="mb-1 block font-bold">表示順</span>
-              <input
-                v-model.number="form.displayOrder"
-                class="min-h-11 w-full rounded-xl border px-3"
-                type="number"
-                min="0"
-                max="9999"
-                step="1"
-                required
-                :aria-invalid="Boolean(errorMessage)"
-                aria-describedby="tool-dialog-error"
-              />
-            </label>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <label class="block">
+                <span class="mb-1 block font-bold">保有数</span>
+                <input
+                  v-model.number="form.stockQuantity"
+                  class="min-h-11 w-full rounded-xl border px-3"
+                  type="number"
+                  min="0"
+                  max="9999"
+                  step="1"
+                  required
+                  :aria-invalid="Boolean(errorMessage)"
+                  aria-describedby="tool-dialog-error"
+                />
+              </label>
+              <label class="block">
+                <span class="mb-1 block font-bold">表示順</span>
+                <input
+                  v-model.number="form.displayOrder"
+                  class="min-h-11 w-full rounded-xl border px-3"
+                  type="number"
+                  min="0"
+                  max="9999"
+                  step="1"
+                  required
+                  :aria-invalid="Boolean(errorMessage)"
+                  aria-describedby="tool-dialog-error"
+                />
+              </label>
+            </div>
+            <p class="text-sm text-[#49666a]">
+              保有数はチームの総数です。日別の持ち出し操作では増減しません。
+            </p>
           </div>
-          <p class="text-sm text-[#49666a]">
-            保有数はチームの総数です。日別の持ち出し操作では増減しません。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+          <div
+            class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-white px-6 py-4"
+          >
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"
@@ -510,16 +528,31 @@ function messageFor(error: unknown): string {
             </button>
           </div>
         </form>
-        <div v-else-if="dialogMode === 'status'" class="mt-5">
-          <p>
-            {{ selectedTool?.name }}を{{
-              selectedTool?.status === 'ACTIVE' ? '利用停止' : '再有効化'
-            }}しますか？
-          </p>
-          <p class="mt-2 text-sm text-[#49666a]">
-            過去の日別チェックの記録は削除されません。
-          </p>
-          <div class="app-dialog-actions sticky bottom-0 -mx-6 -mb-6 mt-6 border-t border-[#cfdbd5] bg-white px-6 py-4">
+        <div
+          v-else-if="dialogMode === 'status'"
+          class="flex min-h-0 flex-1 flex-col"
+        >
+          <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <p
+              v-if="errorMessage"
+              id="tool-dialog-error"
+              class="mb-4 rounded-xl bg-[#fbe4e1] p-3 text-sm text-[#8d2f2b]"
+              role="alert"
+            >
+              {{ errorMessage }}
+            </p>
+            <p>
+              {{ selectedTool?.name }}を{{
+                selectedTool?.status === 'ACTIVE' ? '利用停止' : '再有効化'
+              }}しますか？
+            </p>
+            <p class="mt-2 text-sm text-[#49666a]">
+              過去の日別チェックの記録は削除されません。
+            </p>
+          </div>
+          <div
+            class="app-dialog-actions shrink-0 border-t border-[#cfdbd5] bg-white px-6 py-4"
+          >
             <button
               class="min-h-11 rounded-xl border px-4"
               type="button"

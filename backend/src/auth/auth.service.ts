@@ -315,6 +315,10 @@ export class AuthService {
       if (!(await verifyPassword(user.passwordHash, dto.currentPassword))) {
         return 'wrong-password' as const;
       }
+      if (dto.currentPassword === dto.newPassword) {
+        // 初回変更で仮パスワードを再設定すると漏えいリスクが残るため、状態を更新せず拒否する。
+        return 'unchanged-password' as const;
+      }
 
       // 平文はこの処理中だけ使用し、DBへは新しいArgon2idハッシュだけを保存する。
       user.passwordHash = await hashPassword(dto.newPassword);
@@ -345,6 +349,18 @@ export class AuthService {
       throw new UnprocessableEntityException(
         '現在のパスワードが正しくありません。',
       );
+    }
+    if (outcome === 'unchanged-password') {
+      this.auditLogService.authentication(
+        'authentication_password_change',
+        'failed',
+        { userId: currentUser.id },
+      );
+      throw new UnprocessableEntityException({
+        statusCode: 422,
+        code: 'PASSWORD_UNCHANGED',
+        message: '現在のパスワードとは異なるパスワードを設定してください。',
+      });
     }
     this.auditLogService.authentication(
       'authentication_password_change',

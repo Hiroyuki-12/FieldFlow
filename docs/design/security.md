@@ -25,6 +25,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 - Argon2idを使用し、最低19MiB・2 iterations・parallelism 1を基準に、Render FreeとFargateの各実行環境で応答時間を計測して安全側へ調整する。
 - パスワードは12〜128文字。文字種の強制や定期変更は行わず、既知の弱いパスワードは拒否できる構造にする。
 - 仮パスワードは暗号学的乱数で16文字生成し、レスポンスに一度だけ含める。
+- 現在のパスワードと同じ値への変更はBackendで拒否し、仮パスワードの再設定による初回変更回避を防ぐ。
 - パスワード、仮パスワード、ハッシュ、Authorization、Cookieをログ・例外・分析イベントへ出さない。
 
 ## 4. 認可

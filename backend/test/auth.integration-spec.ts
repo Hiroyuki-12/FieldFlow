@@ -438,6 +438,51 @@ describe('Auth API (integration)', () => {
       });
   });
 
+  it('仮パスワードと同じ値への変更を拒否し、初回変更状態とSessionを維持する', async () => {
+    const loginResponse = await login('admin', adminPassword).expect(200);
+    const body = loginResponse.body as LoginBody;
+    const refreshCookie = extractRefreshCookie(
+      loginResponse.headers['set-cookie'],
+    );
+
+    const response = await request(app.getHttpServer() as Server)
+      .patch('/api/v1/auth/password')
+      .set('Authorization', `Bearer ${body.accessToken}`)
+      .send({
+        currentPassword: adminPassword,
+        newPassword: adminPassword,
+      })
+      .expect(422);
+
+    expect(response.body).toMatchObject({
+      code: 'PASSWORD_UNCHANGED',
+      message: '現在のパスワードとは異なるパスワードを設定してください。',
+    });
+    const [admin] = await dataSource.query<UserAuthRow[]>(
+      `SELECT password_hash AS passwordHash,
+              must_change_password AS mustChangePassword,
+              auth_version AS authVersion,
+              failed_login_count AS failedLoginCount,
+              locked_until AS lockedUntil, version
+       FROM users WHERE id = ?`,
+      [adminId],
+    );
+    await expect(
+      verify(admin?.passwordHash ?? '', adminPassword),
+    ).resolves.toBe(true);
+    expect(admin?.mustChangePassword).toBe(1);
+    expect(admin?.authVersion).toBe(1);
+    expect(admin?.version).toBe(1);
+
+    // 拒否時は認証情報を変更していないため、入力を直して再送できるSessionを残す。
+    await refresh(refreshCookie).expect(200);
+    expect(logEventSpy).toHaveBeenCalledWith(
+      'warn',
+      'authentication_password_change',
+      expect.objectContaining({ result: 'failed', userId: adminId }),
+    );
+  });
+
   it('Refresh Cookieを使うAPIで不正Originを拒否する', async () => {
     const loginResponse = await login('worker01', workerPassword).expect(200);
     const cookie = extractRefreshCookie(loginResponse.headers['set-cookie']);

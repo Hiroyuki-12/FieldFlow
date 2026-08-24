@@ -6,9 +6,9 @@ RaiseTimeLine の `CLAUDE.md` と `.claude/skills` を元に、Codex 向けに�
 ## プロジェクトの目的
 
 FieldFlow は、過去に作成した道具管理アプリ `tool-management` / `tool-management-frontend` を題材に、
-AI エンジニアコース中級編の最終課題としてブラッシュアップする新アプリ。
+学習した技術を統合して実務を意識した構成へブラッシュアップする新アプリ。
 
-中級編で学んだ技術を統合して活用することを目的とする。
+個別に学んだ技術を統合して活用することを目的とする。
 
 - 認証・認可
 - 単体テスト / 統合テスト
@@ -107,8 +107,8 @@ Codex は各主要ステップで、次のような確認を出す。
 ### Codex の振る舞い
 
 - ユーザーが理解したいと言っている場面では、実装だけを先に進めない。
-- 説明は難しすぎる言葉に逃げず、初級編から中級編へ橋渡しする粒度で行う。
-- ただし、内容を薄めすぎず、提出課題で説明できる技術用語はきちんと使う。
+- 説明は難しすぎる言葉に逃げず、初学者から実務設計へ橋渡しする粒度で行う。
+- ただし、内容を薄めすぎず、設計レビューで説明できる技術用語はきちんと使う。
 - 実装後は「何を変更したか」だけでなく「なぜその変更が必要だったか」を説明する。
 - 最終的に README / 設計書 / アーキテクチャ説明として再利用できる形で要点を残す。
 
@@ -129,14 +129,14 @@ Codex は各主要ステップで、次のような確認を出す。
 - `fix/#34-post-delete-500`
 - `docs/#7-update-readme`
 
-| type | 用途 |
-| --- | --- |
-| `feat` | 新機能追加 |
-| `fix` | バグ修正 |
-| `docs` | ドキュメントのみの変更 |
+| type       | 用途                         |
+| ---------- | ---------------------------- |
+| `feat`     | 新機能追加                   |
+| `fix`      | バグ修正                     |
+| `docs`     | ドキュメントのみの変更       |
 | `refactor` | 振る舞いを変えないリファクタ |
-| `chore` | ビルド・依存・設定など雑務 |
-| `test` | テスト追加・修正 |
+| `chore`    | ビルド・依存・設定など雑務   |
+| `test`     | テスト追加・修正             |
 
 - `#<issue>` は紐づく Issue 番号。
 - `<slug>` は半角英小文字 + ハイフンの短い説明。
@@ -152,11 +152,11 @@ Codex は各主要ステップで、次のような確認を出す。
 
 FieldFlow の確定技術構成（Vue + NestJS + MySQL）では、次のポートを標準とする。
 
-| サービス | ポート |
-| --- | --- |
+| サービス                         | ポート |
+| -------------------------------- | ------ |
 | フロントエンド (Vite dev server) | `5173` |
-| バックエンド (NestJS) | `8080` |
-| MySQL | `3306` |
+| バックエンド (NestJS)            | `8080` |
+| MySQL                            | `3306` |
 
 サーバー起動時にポートが競合していた場合:
 
@@ -199,30 +199,30 @@ const passwordHash = await argon2.hash(password, argon2Options);
 コードを書いたら以下を実行してエラーを確認する。
 まだ該当ディレクトリやコマンドが存在しない初期段階では、作成済み範囲に対応するチェックを実行する。
 
-| 対象 | コマンド | 内容 |
-| --- | --- | --- |
-| フロントエンド 型チェック | `cd frontend && npm run typecheck` | Vue / TypeScript 型エラーの検出 |
-| フロントエンド lint | `cd frontend && npm run lint` | ESLint ルール違反の検出 |
-| フロントエンド テスト | `cd frontend && npm test -- --run` | Vitest によるユニット / 統合テスト |
-| フロントエンド ビルド | `cd frontend && npm run build` | Vite 本番ビルドの確認 |
-| バックエンド 型チェック | `cd backend && npm run typecheck` | NestJS / TypeScript 型エラーの検出 |
-| バックエンド lint | `cd backend && npm run lint` | ESLint / Prettier 違反の検出 |
-| バックエンド 単体テスト | `cd backend && npm test` | Jest による Service / Guard 等のテスト |
-| バックエンド 結合テスト | `cd backend && npm run test:integration` | Testcontainers MySQL による API / DB テスト |
-| バックエンド ビルド | `cd backend && npm run build` | NestJS のコンパイル確認 |
+| 対象                      | コマンド                                 | 内容                                        |
+| ------------------------- | ---------------------------------------- | ------------------------------------------- |
+| フロントエンド 型チェック | `cd frontend && npm run typecheck`       | Vue / TypeScript 型エラーの検出             |
+| フロントエンド lint       | `cd frontend && npm run lint`            | ESLint ルール違反の検出                     |
+| フロントエンド テスト     | `cd frontend && npm test -- --run`       | Vitest によるユニット / 統合テスト          |
+| フロントエンド ビルド     | `cd frontend && npm run build`           | Vite 本番ビルドの確認                       |
+| バックエンド 型チェック   | `cd backend && npm run typecheck`        | NestJS / TypeScript 型エラーの検出          |
+| バックエンド lint         | `cd backend && npm run lint`             | ESLint / Prettier 違反の検出                |
+| バックエンド 単体テスト   | `cd backend && npm test`                 | Jest による Service / Guard 等のテスト      |
+| バックエンド 結合テスト   | `cd backend && npm run test:integration` | Testcontainers MySQL による API / DB テスト |
+| バックエンド ビルド       | `cd backend && npm run build`            | NestJS のコンパイル確認                     |
 
 ## テスト運用ルール
 
 実装と同じ PR にテストも含める。
 
-| 追加・変更した本番コード | 同じ PR に追加すべきテスト |
-| --- | --- |
-| Backend Service | `*.service.spec.ts` |
-| Backend Controller / Guard | `*.controller.spec.ts` / `*.guard.spec.ts` |
-| Backend Entity / Migration / DB制約 | `test/integration/*.spec.ts` |
-| Frontend API クライアント | `src/api/*.test.ts` |
-| Frontend コンポーネント | `src/components/*.test.ts` |
-| Frontend 画面 | `src/views/*.test.ts` |
+| 追加・変更した本番コード            | 同じ PR に追加すべきテスト                 |
+| ----------------------------------- | ------------------------------------------ |
+| Backend Service                     | `*.service.spec.ts`                        |
+| Backend Controller / Guard          | `*.controller.spec.ts` / `*.guard.spec.ts` |
+| Backend Entity / Migration / DB制約 | `test/integration/*.spec.ts`               |
+| Frontend API クライアント           | `src/api/*.test.ts`                        |
+| Frontend コンポーネント             | `src/components/*.test.ts`                 |
+| Frontend 画面                       | `src/views/*.test.ts`                      |
 
 リファクタリングや設定だけの変更など、テスト省略が妥当な場合は理由を明記する。
 
@@ -247,15 +247,15 @@ Codex ではそのまま効かない。FieldFlow では、Codex の sandbox / ap
 
 必要な作業内容を説明したうえで、以下のコマンドを使用してよい。
 
-| 用途 | コマンド例 | 目的 |
-| --- | --- | --- |
-| GitHub Issue / PR | `gh issue *`, `gh pr *` | Issue 確認、PR 確認、PR 作成 |
-| GitHub Actions | `gh run *`, `gh api *` | CI 状態確認、Actions ログ調査 |
-| AWS 認証確認 | `aws sts *` | 操作対象アカウントの確認 |
-| AWS ECS / ECR | `aws ecs *`, `aws ecr *` | ECS サービス・タスク・イメージ確認 |
-| AWS ログ | `aws logs *` | CloudWatch Logs の確認 |
-| AWS ネットワーク / DB / S3 | `aws rds *`, `aws elbv2 *`, `aws ec2 *`, `aws s3api *` | RDS、ALB、VPC、S3 の状態確認 |
-| Terraform | `terraform fmt *`, `terraform init *`, `terraform validate *`, `terraform plan *`, `terraform show *`, `terraform state *` | IaC の整形、初期化、検証、差分確認 |
+| 用途                       | コマンド例                                                                                                                 | 目的                               |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| GitHub Issue / PR          | `gh issue *`, `gh pr *`                                                                                                    | Issue 確認、PR 確認、PR 作成       |
+| GitHub Actions             | `gh run *`, `gh api *`                                                                                                     | CI 状態確認、Actions ログ調査      |
+| AWS 認証確認               | `aws sts *`                                                                                                                | 操作対象アカウントの確認           |
+| AWS ECS / ECR              | `aws ecs *`, `aws ecr *`                                                                                                   | ECS サービス・タスク・イメージ確認 |
+| AWS ログ                   | `aws logs *`                                                                                                               | CloudWatch Logs の確認             |
+| AWS ネットワーク / DB / S3 | `aws rds *`, `aws elbv2 *`, `aws ec2 *`, `aws s3api *`                                                                     | RDS、ALB、VPC、S3 の状態確認       |
+| Terraform                  | `terraform fmt *`, `terraform init *`, `terraform validate *`, `terraform plan *`, `terraform show *`, `terraform state *` | IaC の整形、初期化、検証、差分確認 |
 
 ### 明示承認が必要な操作
 

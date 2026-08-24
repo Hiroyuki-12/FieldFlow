@@ -5,7 +5,7 @@
 - `main`へ直接commit・pushしない。
 - 1 Issue = 1 branch = 1 PRとし、ブランチ名は`<type>/#<issue>-<slug>`。
 - PR本文に`Closes #<issue>`を含め、レビュー会話とCIを全て解決してからsquashまたはrebase mergeする。
-- 公開先ごとにGitHub Environment `cloudflare-public`と`aws-course`を分け、各Environmentの承認後だけデプロイする。
+- 公開先ごとにGitHub Environment `cloudflare-public`と`aws-validation`を分け、各Environmentの承認後だけデプロイする。
 
 ## 2. CI
 
@@ -70,7 +70,7 @@ k6性能試験は通常PRのRequired checkへ含めず、リリース候補、�
 
 ## 3. CD
 
-現時点ではGitHub Actionsによる自動CDは未実装である。Cloudflare公開環境は承認後に手動でMigration、Render deploy、Wrangler deployを行っており、以下は再現可能な手動手順と今後自動化する際の目標フローを示す。AWS課題環境のCDはロードマップ17の対象である。
+現時点ではGitHub Actionsによる自動CDは未実装である。Cloudflare公開環境は承認後に手動でMigration、Render deploy、Wrangler deployを行っており、以下は再現可能な手動手順と今後自動化する際の目標フローを示す。AWS実務構成検証環境のCDはロードマップ17の対象である。
 
 ### 3.1 Cloudflare公開環境
 
@@ -93,12 +93,12 @@ flowchart TD
 - Migration成功後だけRenderを更新し、Render health成功後にWorkerとStatic AssetsをCloudflareへ反映する。
 - 公開URLでhealth、ログイン、Refresh、日別表の最小スモーク確認を行う。公開環境へk6負荷試験は実行しない。
 
-### 3.2 AWS課題環境
+### 3.2 AWS実務構成検証環境
 
 ```mermaid
 flowchart TD
     M[main merge] --> CI[CI成功]
-    CI --> A[aws-course承認]
+    CI --> A[aws-validation承認]
     A --> OIDC[AWS OIDC認証]
     OIDC --> IMG["Backend build/push<br/>ECR:commit SHA"]
     OIDC --> WEB["Frontend build<br/>S3 upload"]

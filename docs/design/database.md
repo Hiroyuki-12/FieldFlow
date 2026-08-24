@@ -116,20 +116,20 @@ erDiagram
 
 ### users
 
-| カラム | 型・制約 | 説明 |
-| --- | --- | --- |
-| id | `char(36)` PK | UUID |
-| name | `varchar(100)` not null | 表示名 |
-| login_id | `varchar(50)` unique not null | 正規化したログインID |
-| password_hash | `varchar(255)` not null | Argon2idハッシュ |
-| role | `enum('ADMIN','WORKER')` | 権限 |
-| status | `enum('ACTIVE','INACTIVE')` | 利用状態 |
-| must_change_password | `boolean` default true | 初回変更制御 |
-| auth_version | `int unsigned` default 1 | 全端末のAccess Token失効判定 |
-| failed_login_count | `int unsigned` default 0 | ログイン制限用 |
-| locked_until | `datetime(6)` null | 一時制限終了時刻 |
-| version | `int unsigned` default 1 | ユーザー管理画面で変更する項目の楽観ロック。ログイン失敗回数など認証内部の更新では加算しない |
-| created_at / updated_at | `datetime(6)` | 監査日時 |
+| カラム                  | 型・制約                      | 説明                                                                                         |
+| ----------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| id                      | `char(36)` PK                 | UUID                                                                                         |
+| name                    | `varchar(100)` not null       | 表示名                                                                                       |
+| login_id                | `varchar(50)` unique not null | 正規化したログインID                                                                         |
+| password_hash           | `varchar(255)` not null       | Argon2idハッシュ                                                                             |
+| role                    | `enum('ADMIN','WORKER')`      | 権限                                                                                         |
+| status                  | `enum('ACTIVE','INACTIVE')`   | 利用状態                                                                                     |
+| must_change_password    | `boolean` default true        | 初回変更制御                                                                                 |
+| auth_version            | `int unsigned` default 1      | 全端末のAccess Token失効判定                                                                 |
+| failed_login_count      | `int unsigned` default 0      | ログイン制限用                                                                               |
+| locked_until            | `datetime(6)` null            | 一時制限終了時刻                                                                             |
+| version                 | `int unsigned` default 1      | ユーザー管理画面で変更する項目の楽観ロック。ログイン失敗回数など認証内部の更新では加算しない |
+| created_at / updated_at | `datetime(6)`                 | 監査日時                                                                                     |
 
 ### refresh_sessions
 
@@ -192,6 +192,6 @@ erDiagram
 2. ローカルMySQL 8.4とTestcontainersで上りMigrationを検証する。
 3. 公開環境では、アプリ起動時に自動実行せず、デプロイ承認後の一回限りの処理として`migration:run`を実行する。
    - Cloudflare公開環境: Aiven MySQLへ接続する一回限りの実行環境からMigrationを適用し、成功後だけRender BackendとWorkerを更新する。
-   - AWS課題環境: 新しいバックエンドイメージの一回限りECS TaskからRDSへMigrationを適用し、成功後だけECS Serviceを更新する。
+   - AWS実務構成検証環境: 新しいバックエンドイメージの一回限りECS TaskからRDSへMigrationを適用し、成功後だけECS Serviceを更新する。
 4. Migration失敗時はアプリを更新せず、ログとDBのMigration履歴を確認する。アプリ起動のたびに再実行して原因を見えにくくしない。
 5. 原則として後方互換な追加→アプリ移行→不要列削除を別リリースに分け、破壊的な自動rollbackへ依存しない。

@@ -11,7 +11,7 @@
 5. Vue、NestJS、TypeORM、MySQLはそれぞれどの役割を担当しますか。
 6. Cloudflare Worker、Static Assets、Render、Aivenはどの順番でつながり、何を担当しますか。Renderのcold start中にFrontendはどう動きますか。
 7. CloudFront、S3、ALB、ECS Fargate、RDSはどの順番でつながり、何を担当しますか。
-8. Cloudflare公開環境とAWS課題提出環境を分ける理由を、費用・公開目的・学習目的から説明してください。
+8. Cloudflare公開環境とAWS実務構成検証環境を分ける理由を、費用・公開目的・検証目的から説明してください。
 9. 楽観ロックが必要な理由と、競合時の画面動作を説明してください。
 10. 単体、結合、E2E、性能テストは、それぞれ何を保証しますか。
 11. セキュリティ、ログ、CI/CDで特に注意することを挙げてください。

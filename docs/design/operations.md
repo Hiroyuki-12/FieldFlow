@@ -2,7 +2,7 @@
 
 ## 1. ログ方針
 
-NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環境ではRender Logs、AWS課題環境ではECSの`awslogs`ドライバーからCloudWatch Logsへ送る。業務データの完全な内容ではなく、障害調査とセキュリティ追跡に必要なメタデータを記録する。
+NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環境ではRender Logs、AWS実務構成検証環境ではECSの`awslogs`ドライバーからCloudWatch Logsへ送る。業務データの完全な内容ではなく、障害調査とセキュリティ追跡に必要なメタデータを記録する。
 
 ```json
 {
@@ -22,14 +22,14 @@ NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環�
 
 ## 2. 記録するイベント
 
-| 分類 | 例 | レベル |
-| --- | --- | --- |
-| HTTP | method、テンプレート化path、status、duration、requestId | info / 5xxはerror |
-| 認証 | login成功・失敗、refresh再利用、logout | info / warn |
-| 管理操作 | ユーザー・カテゴリ・道具の作成、変更、利用停止 | info |
-| 競合 | 楽観ロック、一意制約、業務ルール拒否 | warn |
-| DB・外部依存 | 接続失敗、timeout、Migration失敗 | error |
-| 起動停止 | version、environment、起動成功・失敗 | info / error |
+| 分類         | 例                                                      | レベル            |
+| ------------ | ------------------------------------------------------- | ----------------- |
+| HTTP         | method、テンプレート化path、status、duration、requestId | info / 5xxはerror |
+| 認証         | login成功・失敗、refresh再利用、logout                  | info / warn       |
+| 管理操作     | ユーザー・カテゴリ・道具の作成、変更、利用停止          | info              |
+| 競合         | 楽観ロック、一意制約、業務ルール拒否                    | warn              |
+| DB・外部依存 | 接続失敗、timeout、Migration失敗                        | error             |
+| 起動停止     | version、environment、起動成功・失敗                    | info / error      |
 
 管理操作はactorの`userId`、対象種別、対象ID、結果を記録する。チェック項目の更新者を業務画面へ表示する履歴はMVP対象外だが、セキュリティ調査用アクセスログには認証ユーザーIDを含める。
 
@@ -56,33 +56,33 @@ NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環�
 
 ### Cloudflare公開環境
 
-| 監視 | 条件の初期値 | 対応 |
-| --- | --- | --- |
-| Worker / Render 5xx | 5分で5件以上 | requestId、Render events、直近deploy確認 |
-| Render起動失敗 | 1件以上 | image、Secrets、Aiven TLS接続確認 |
-| API latency | p95 1秒超が継続 | cold start、slow API、DB query確認 |
-| Aiven connections | 契約上限80%以上 | connection pool、接続リーク確認 |
-| Aiven storage | 契約上限80%以上 | 容量・不要データ・プラン確認 |
+| 監視                | 条件の初期値    | 対応                                     |
+| ------------------- | --------------- | ---------------------------------------- |
+| Worker / Render 5xx | 5分で5件以上    | requestId、Render events、直近deploy確認 |
+| Render起動失敗      | 1件以上         | image、Secrets、Aiven TLS接続確認        |
+| API latency         | p95 1秒超が継続 | cold start、slow API、DB query確認       |
+| Aiven connections   | 契約上限80%以上 | connection pool、接続リーク確認          |
+| Aiven storage       | 契約上限80%以上 | 容量・不要データ・プラン確認             |
 
 通知方法と実際に取得できる指標はCloudflare・Render・Aiven設定時に確認し、無料枠で利用できる範囲を設計書へ追記する。
 
-### AWS課題環境
+### AWS実務構成検証環境
 
-| 監視 | 条件の初期値 | 対応 |
-| --- | --- | --- |
-| ALB 5xx | 5分で5件以上 | ECS・アプリログ確認 |
-| Target unhealthy | 1以上が2回継続 | health、起動ログ、DB接続確認 |
-| ECS task count | desired未満 | ECS event、ECR、SSM確認 |
-| CPU / Memory | 80%以上が10分 | 負荷・リーク・task size確認 |
-| API latency | ALB p95 1秒超が継続 | slow API・DB query確認 |
-| RDS storage | 空き20%未満 | 容量拡張、不要データ調査 |
-| RDS connections | 上限80%以上 | connection pool確認 |
+| 監視             | 条件の初期値        | 対応                         |
+| ---------------- | ------------------- | ---------------------------- |
+| ALB 5xx          | 5分で5件以上        | ECS・アプリログ確認          |
+| Target unhealthy | 1以上が2回継続      | health、起動ログ、DB接続確認 |
+| ECS task count   | desired未満         | ECS event、ECR、SSM確認      |
+| CPU / Memory     | 80%以上が10分       | 負荷・リーク・task size確認  |
+| API latency      | ALB p95 1秒超が継続 | slow API・DB query確認       |
+| RDS storage      | 空き20%未満         | 容量拡張、不要データ調査     |
+| RDS connections  | 上限80%以上         | connection pool確認          |
 
 通知先はAWS構築時にSNS等で設定し、設計書へ実値を追記する。
 
 ## 6. 保持・バックアップ
 
-- Cloudflare・Render・Aivenのlogは無料枠の保持期間を確認し、必要な障害情報とdeploy時刻をREADMEまたは提出記録へ残す。
+- Cloudflare・Render・Aivenのlogは無料枠の保持期間を確認し、必要な障害情報とdeploy時刻をREADMEまたは運用記録へ残す。
 - Aivenは利用プランで提供されるバックアップ・復旧条件を設定時に確認する。無料枠へバックアップ保証を決め打ちしない。
 - CloudWatch Logsは30日保持する。AWS学習完了後の費用見直し対象とする。
 - RDS自動バックアップは7日保持し、暗号化する。
@@ -99,7 +99,7 @@ NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環�
 4. Aivenの接続数、容量、サービス状態、TLS設定を確認する。
 5. 影響、原因、暫定対応、恒久対応を記録する。
 
-### AWS課題環境
+### AWS実務構成検証環境
 
 1. CloudFront/ALBのHTTPステータスと到達性を確認する。
 2. ECS Service、Task、Deployment、health状態を確認する。

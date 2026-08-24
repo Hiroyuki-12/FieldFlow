@@ -2,7 +2,7 @@
 
 ## 1. 方針
 
-コンテスト審査と転職用ポートフォリオでは、Cloudflare Workers Static Assetsと無料枠Workerを画面・APIの単一公開Originにする。VueはCloudflare edgeから配信し、Workerは`/api/*`だけをRender Free Web ServiceのNestJSへproxyする。永続データは作成済みのAiven for MySQL 8.4へTLS接続して保存する。
+ポートフォリオの長期公開では、Cloudflare Workers Static Assetsと無料枠Workerを画面・APIの単一公開Originにする。VueはCloudflare edgeから配信し、Workerは`/api/*`だけをRender Free Web ServiceのNestJSへproxyする。永続データは作成済みのAiven for MySQL 8.4へTLS接続して保存する。
 
 Cloudflare Containersは使用しない。Workers Paidの月額契約を避けながら既存のDocker化したNestJSを動かすため、Backend computeをRender Freeへ分離する。Renderのローカルファイルは停止・再作成・デプロイで失われるため、MySQLはRender内へ置かない。
 
@@ -80,13 +80,13 @@ Render Freeは15分間inbound trafficがないと停止し、次のrequestで再
 
 ## 4. サービス別責務
 
-| サービス | 責務 |
-| --- | --- |
-| Cloudflare Worker | HTTPSの単一入口。`/api/*`をRenderへproxyし、Proxy Headerと共有鍵を安全な値へ置換する |
-| Workers Static Assets | `frontend/dist`のHTML、CSS、JavaScript配信とVue Router用SPA fallback |
-| Render Free Web Service | Node.js 24、NestJS、Argon2id、TypeORM、`mysql2`をDockerで実行する |
-| Aiven for MySQL | MySQL 8.4の永続データ、backup、metricsをBackendのライフサイクルから分離して管理する |
-| Wrangler / `render.yaml` | 非秘密設定、routing、build、health、Free plan、regionをコードで再現する |
+| サービス                 | 責務                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| Cloudflare Worker        | HTTPSの単一入口。`/api/*`をRenderへproxyし、Proxy Headerと共有鍵を安全な値へ置換する |
+| Workers Static Assets    | `frontend/dist`のHTML、CSS、JavaScript配信とVue Router用SPA fallback                 |
+| Render Free Web Service  | Node.js 24、NestJS、Argon2id、TypeORM、`mysql2`をDockerで実行する                    |
+| Aiven for MySQL          | MySQL 8.4の永続データ、backup、metricsをBackendのライフサイクルから分離して管理する  |
+| Wrangler / `render.yaml` | 非秘密設定、routing、build、health、Free plan、regionをコードで再現する              |
 
 Cloudflare D1はSQLite系でMySQL用Entity・Migration・制約の互換性がないため採用しない。Render PostgresもDB種別が異なるため、確定技術のMySQL 8.4をAivenで維持する。
 
@@ -150,12 +150,12 @@ MigrationをRenderの通常起動やpre-deployへ自動連結しない。コー�
 
 2026年8月時点の開始前提:
 
-| 対象 | 費用前提 | 主な制限 |
-| --- | --- | --- |
-| Workers Static Assets | 0 USD。静的asset requestとstorageに追加料金なし | Freeは1 versionあたり20,000 files、1 file 25 MiB |
-| Workers Free | 0 USD | 100,000 requests/day、CPU 10 ms/invocation。`/api/*`だけWorkerを実行する |
-| Render Free Web Service | 0 USD | workspace合計750 instance hours/month、15分idleで停止、再起動約1分、ephemeral filesystem、outbound/build/bandwidth枠あり |
-| Aiven MySQL Free | 0 USD | 1 node、1 CPU、1 GB RAM、1 GB disk、最大76接続、SLAなし、未使用時に停止される可能性あり |
+| 対象                    | 費用前提                                        | 主な制限                                                                                                                 |
+| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Workers Static Assets   | 0 USD。静的asset requestとstorageに追加料金なし | Freeは1 versionあたり20,000 files、1 file 25 MiB                                                                         |
+| Workers Free            | 0 USD                                           | 100,000 requests/day、CPU 10 ms/invocation。`/api/*`だけWorkerを実行する                                                 |
+| Render Free Web Service | 0 USD                                           | workspace合計750 instance hours/month、15分idleで停止、再起動約1分、ephemeral filesystem、outbound/build/bandwidth枠あり |
+| Aiven MySQL Free        | 0 USD                                           | 1 node、1 CPU、1 GB RAM、1 GB disk、最大76接続、SLAなし、未使用時に停止される可能性あり                                  |
 
 Worker request上限超過時は`/api/*`が429または制限errorになり得る。Renderは月間枠や外向き通信量の条件で停止される可能性がある。Cloudflare usage、Render usage／events、Aiven接続数／storage／通知を確認し、無料枠を超える前に公開継続またはpaid移行を判断する。
 

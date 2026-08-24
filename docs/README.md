@@ -24,7 +24,7 @@
 - [アプリケーション構成・技術スタック](design/application-architecture.md)
 - [デプロイ環境の使い分け](design/deployment-strategy.md)
 - [Cloudflare・Render・Aiven公開構成](design/cloudflare-architecture.md)
-- [AWS・Terraform課題提出構成](design/aws-architecture.md)
+- [AWS・Terraform実務構成検証](design/aws-architecture.md)
 - [ログ・監視・バックアップ](design/operations.md)
 - [Cloudflare・Render・Aiven運用手順](operations/cloudflare-deployment.md)
 - [非機能要件](design/non-functional-requirements.md)
@@ -48,17 +48,17 @@
 - [ロードマップ14 Playwright E2E 実装計画](plans/roadmap-14-playwright-e2e.md)
 - [ロードマップ15 k6性能試験 実装計画](plans/roadmap-15-k6-performance.md)
 - [ロードマップ16 Cloudflare・Render・Aiven公開環境 実装計画](plans/roadmap-16-cloudflare-deployment.md)
-- [ロードマップ17 AWS課題提出環境 実装計画](plans/roadmap-17-aws-deployment.md)
+- [ロードマップ17 AWS実務構成検証環境 実装計画](plans/roadmap-17-aws-deployment.md)
 - [理解度チェック](understanding-check.md)
 
 ## 主要な対応関係
 
-| 要件領域 | 機能定義 | 画面 | API | DB | 主なテスト |
-| --- | --- | --- | --- | --- | --- |
-| 認証 | `features/auth.md` | SCR-01〜04 | AUTH-* | users / refresh_sessions | UT-AUTH / IT-AUTH / E2E-AUTH |
-| ユーザー | `features/users.md` | SCR-21 | USER-* | users | UT-USER / IT-USER / E2E-ADMIN |
-| 作業カテゴリ | `features/categories.md` | SCR-22 | CAT-* | categories | UT-CAT / IT-CAT / E2E-ADMIN |
-| 道具 | `features/tools.md` | SCR-23 | TOOL-* | tools | UT-TOOL / IT-TOOL / E2E-ADMIN |
-| 日別チェック | `features/daily-checklists.md` | SCR-10,11 | CHECK-* | daily_checklists / daily_checklist_periods / daily_checklist_period_categories / daily_checklist_items | UT-CHECK / IT-CHECK / E2E-CHECK / [PERF-CHECK](../perf/scenarios/checklist.ts) |
+| 要件領域     | 機能定義                       | 画面       | API     | DB                                                                                                     | 主なテスト                                                                     |
+| ------------ | ------------------------------ | ---------- | ------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 認証         | `features/auth.md`             | SCR-01〜04 | AUTH-*  | users / refresh_sessions                                                                               | UT-AUTH / IT-AUTH / E2E-AUTH                                                   |
+| ユーザー     | `features/users.md`            | SCR-21     | USER-*  | users                                                                                                  | UT-USER / IT-USER / E2E-ADMIN                                                  |
+| 作業カテゴリ | `features/categories.md`       | SCR-22     | CAT-*   | categories                                                                                             | UT-CAT / IT-CAT / E2E-ADMIN                                                    |
+| 道具         | `features/tools.md`            | SCR-23     | TOOL-*  | tools                                                                                                  | UT-TOOL / IT-TOOL / E2E-ADMIN                                                  |
+| 日別チェック | `features/daily-checklists.md` | SCR-10,11  | CHECK-* | daily_checklists / daily_checklist_periods / daily_checklist_period_categories / daily_checklist_items | UT-CHECK / IT-CHECK / E2E-CHECK / [PERF-CHECK](../perf/scenarios/checklist.ts) |
 
 完全な対応表は[トレーサビリティ](design/traceability.md)を参照する。

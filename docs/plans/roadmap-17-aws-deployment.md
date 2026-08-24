@@ -1,10 +1,10 @@
-# ロードマップ17 AWS課題提出環境 実装計画
+# ロードマップ17 AWS実務構成検証環境 実装計画
 
 ## 1. 目的
 
-AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFront、ALB、ECS Fargate、RDS MySQLへデプロイし、Terraformと承認付きCDで再現できる状態を作る。
+AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Fargate、RDS MySQLへデプロイし、Terraformと承認付きCDで再現できる状態を作る。
 
-コンテスト・転職用ポートフォリオの長期公開はロードマップ16のCloudflare・Render・Aiven環境が担当する。AWS環境はAWSのnetwork、container、managed DB、監視、IaCを学習・説明するための別環境とし、課題review期間と費用を確認して運用する。
+ポートフォリオの長期公開はロードマップ16のCloudflare・Render・Aiven環境が担当する。AWS環境はAWSのnetwork、container、managed DB、監視、IaCを検証・説明するための別環境とし、検証期間と費用を確認して運用する。
 
 実装開始時にロードマップ17専用Issueを起票する。RaiseTimeLineのTerraform・AWS構成は設計判断と実装手順の参考にするが、FieldFlowの名前、port、health、Secrets、MySQL 8.4、現在のAWS仕様に合わせて差分を確認する。
 
@@ -44,16 +44,16 @@ AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFr
 
 - GitHub Actions OIDCと最小権限Deploy Role
 - commit SHAでBackend imageを識別
-- `aws-course` GitHub Environmentの承認付きデプロイ
+- `aws-validation` GitHub Environmentの承認付きデプロイ
 - CloudWatch Logs、ALB・ECS・RDS監視、費用通知
-- Terraform plan、構成図、公開確認、課題提出用の説明資料
+- Terraform plan、構成図、公開確認、構成・検証結果の説明資料
 
 ## 4. 対象外
 
 - Cloudflare・Render・Aiven環境の置き換えまたは停止
 - Multi-AZ、ECS複数Task、Auto Scaling、WAF、独自ドメイン
 - AWS公開DBへE2E Seedやk6を直接実行すること
-- 課題レビュー期間を確認しない自動`destroy`
+- AWS検証期間を確認しない自動`destroy`
 
 ## 5. 実装順序
 
@@ -64,7 +64,7 @@ AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFr
 5. Migration成功後にECS Serviceを更新し、ALB healthとAPIを確認する。
 6. FrontendをS3へ配置し、CloudFrontの同一オリジンから画面・API・認証を確認する。
 7. CloudWatch、Budgets、バックアップ、CD、復旧手順を確認する。
-8. 課題提出に必要なURL、構成図、Terraform plan、テスト・ログ証跡を整理する。
+8. 検証結果として残すURL、構成図、Terraform plan、テスト・ログ証跡を整理する。
 9. レビュー終了後、保存すべき証跡とSnapshotを確認し、ユーザー承認後に停止・削除する。
 
 ## 6. テスト方針
@@ -99,7 +99,7 @@ AIエンジニアコース中級編の課題として、FieldFlowをS3、CloudFr
 ## 9. 関連資料
 
 - [デプロイ環境の使い分け](../design/deployment-strategy.md)
-- [AWS・Terraform課題提出構成](../design/aws-architecture.md)
+- [AWS・Terraform実務構成検証](../design/aws-architecture.md)
 - [CI/CD設計](../design/ci-cd.md)
 - [セキュリティ設計](../design/security.md)
 - [ログ・監視・バックアップ設計](../design/operations.md)

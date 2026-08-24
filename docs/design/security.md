@@ -2,13 +2,13 @@
 
 ## 1. 認証Token
 
-| 対象 | 方針 |
-| --- | --- |
-| Access Token | JWT、15分、レスポンス本文で返しVueのメモリだけに保存 |
-| Refresh Token | 256bit以上のランダム値、7日、HttpOnly Cookie、DBはハッシュだけ |
-| 署名鍵 | 32byte以上、Cloudflare SecretsまたはSSM Parameter Store SecureStringから注入 |
-| ローテーション | Refresh成功ごとに旧セッションを失効し、新Tokenへ置換 |
-| 複数端末 | 端末ごとにrefresh_sessionsを作成 |
+| 対象           | 方針                                                                         |
+| -------------- | ---------------------------------------------------------------------------- |
+| Access Token   | JWT、15分、レスポンス本文で返しVueのメモリだけに保存                         |
+| Refresh Token  | 256bit以上のランダム値、7日、HttpOnly Cookie、DBはハッシュだけ               |
+| 署名鍵         | 32byte以上、Cloudflare SecretsまたはSSM Parameter Store SecureStringから注入 |
+| ローテーション | Refresh成功ごとに旧セッションを失効し、新Tokenへ置換                         |
+| 複数端末       | 端末ごとにrefresh_sessionsを作成                                             |
 
 JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersion`、`iat`、`exp`、`jti`に限定し、氏名や秘密情報を含めない。GuardはDBの利用状態と`authVersion`を確認し、利用停止・パスワード変更・仮パスワード再発行時はDB値を加算して既存Access Tokenも失効させる。
 
@@ -56,7 +56,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 - Aiven MySQLはTLS証明書を検証して接続し、公開アプリ用の最小権限DBユーザーを使用する。
 - Cloudflare API Tokenは対象Account・Workerへ必要な権限だけを付与し、アカウント全体を操作できるGlobal API KeyをCIへ保存しない。
 
-### AWS課題環境
+### AWS実務構成検証環境
 
 - ユーザー→CloudFrontはHTTPSを強制する。独自ドメイン未取得のMVPではCloudFront既定証明書を使う。
 - ALB直アクセスはCloudFrontが付ける`X-Origin-Verify`秘密ヘッダーで拒否する。

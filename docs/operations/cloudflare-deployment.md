@@ -18,11 +18,11 @@ Workers Static Assets、Workers Free、Render Free Web Service、Aiven for MySQL
 
 実行当日に公式料金とlimitを再確認する。2026年8月時点の開始構成:
 
-| 対象 | 開始構成 | 費用と主な制限 |
-| --- | --- | --- |
-| Cloudflare | Workers Static Assets + Workers Free | 0 USD。asset requestは無料・無制限。Workerは100,000 requests/day、CPU 10 ms/invocation |
-| Render | Free Web Service、Singapore、1 instance | 0 USD。workspace合計750 hours/month、15分idleで停止、再起動約1分、ephemeral filesystem |
-| Aiven | 作成済みMySQL 8.4 Free | 0 USD。1 node、1 GB RAM、1 GB disk、最大76接続、SLAなし |
+| 対象       | 開始構成                                | 費用と主な制限                                                                         |
+| ---------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
+| Cloudflare | Workers Static Assets + Workers Free    | 0 USD。asset requestは無料・無制限。Workerは100,000 requests/day、CPU 10 ms/invocation |
+| Render     | Free Web Service、Singapore、1 instance | 0 USD。workspace合計750 hours/month、15分idleで停止、再起動約1分、ephemeral filesystem |
+| Aiven      | 作成済みMySQL 8.4 Free                  | 0 USD。1 node、1 GB RAM、1 GB disk、最大76接続、SLAなし                                |
 
 Renderはoutbound bandwidth、build pipeline、service発信trafficにも無料枠／停止条件がある。支払方法を登録した場合は超過課金の条件も確認する。Workers PaidとCloudflare Containersは使用しない。
 
@@ -99,12 +99,12 @@ Migration失敗時はRender／Workerをdeployしない。公開DBで`migration:r
 
 Blueprintの`sync: false`項目は初回作成画面で入力する。入力値そのものをchatや作業logへ書かない。
 
-| Render key | 内容 |
-| --- | --- |
-| `CORS_ORIGIN` | Cloudflareの実際のHTTPS公開Origin |
-| `INGRESS_PROXY_SECRET` | Workerと共有する32byte以上の乱数 |
-| `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` | Aiven connection情報 |
-| `DB_TLS_CA_BASE64` | Aiven CA PEMのBase64。変換結果をterminalへ表示しない |
+| Render key                                                | 内容                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `CORS_ORIGIN`                                             | Cloudflareの実際のHTTPS公開Origin                    |
+| `INGRESS_PROXY_SECRET`                                    | Workerと共有する32byte以上の乱数                     |
+| `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` | Aiven connection情報                                 |
+| `DB_TLS_CA_BASE64`                                        | Aiven CA PEMのBase64。変換結果をterminalへ表示しない |
 
 `JWT_ACCESS_SECRET`はBlueprintの`generateValue: true`でRenderに生成させる。初期管理者passwordはRenderへ登録しない。
 
@@ -156,14 +156,14 @@ deploy出力でCloudflare公開URLを確認し、そのOriginがRenderの`CORS_O
 
 ## 9. 障害切り分け
 
-| 症状 | 確認順 |
-| --- | --- |
-| 起動待ちが続く | Render events → build／runtime log → Aiven Running → DB TLS／pool |
-| Workerが503を返す | Render health → `RENDER_BACKEND_ORIGIN` → Render status |
-| Render直APIが通る | `INGRESS_PROXY_SECRET`設定とMiddleware有効化を確認 |
+| 症状                     | 確認順                                                                             |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| 起動待ちが続く           | Render events → build／runtime log → Aiven Running → DB TLS／pool                  |
+| Workerが503を返す        | Render health → `RENDER_BACKEND_ORIGIN` → Render status                            |
+| Render直APIが通る        | `INGRESS_PROXY_SECRET`設定とMiddleware有効化を確認                                 |
 | Login後にRefreshできない | Cloudflare公開Originと`CORS_ORIGIN`、Cookie Path／Secure／SameSite、Set-Cookie透過 |
-| 429 | Cloudflare Worker daily limit、Nest rate limit、送信元IPのProxy hopを区別 |
-| Aiven接続失敗 | service state、port、CA、TLS、接続上限を確認。秘密値はlogへ出さない |
+| 429                      | Cloudflare Worker daily limit、Nest rate limit、送信元IPのProxy hopを区別          |
+| Aiven接続失敗            | service state、port、CA、TLS、接続上限を確認。秘密値はlogへ出さない                |
 
 ## 10. rollback
 
@@ -178,6 +178,6 @@ rollbackも外部状態の変更なので、対象versionと影響を説明し�
 - Cloudflare Worker requests、error、log保持期間を確認する。
 - Renderのinstance hours、bandwidth、pipeline minutes、events、停止通知を確認する。
 - Aivenのconnection数、1 GB storage、backup、停止通知を確認する。
-- 公開審査期間だけは各serviceの状態を毎日確認する。
+- ポートフォリオ公開期間は各serviceの状態を定期的に確認する。
 - 常時pingでRenderのidle停止を回避しない。
 - 公開不要になった場合も独断で削除せず、URL保持期間とdata backupを確認する。

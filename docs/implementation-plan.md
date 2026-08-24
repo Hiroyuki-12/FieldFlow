@@ -3,7 +3,7 @@
 ## 1. 目的
 
 この文書は、操作確認用モックから本番利用を想定したFieldFlow MVPへ段階的に移行するための実装順序を定める。
-単に画面を再現するのではなく、要件、API、DB、テスト、運用、Cloudflare公開環境、AWS課題提出環境の依存関係を守りながら、各段階で説明・検証できる状態を作る。
+単に画面を再現するのではなく、要件、API、DB、テスト、運用、Cloudflare公開環境、AWS実務構成検証環境の依存関係を守りながら、各段階で説明・検証できる状態を作る。
 
 ## 2. 現在地
 
@@ -36,14 +36,14 @@
 
 ## 4. DB環境の使い分け
 
-| 用途 | DB | 目的 |
-| --- | --- | --- |
-| ローカル開発 | Docker ComposeのMySQL 8.4（port `3306`） | 開発データを保持し、Frontend・Backendから動作確認する |
-| Backend結合テスト | TestcontainersのMySQL 8.4 | テストごとに隔離した実DBでMigration、制約、トランザクションを検証する |
-| E2E | Docker ComposeのMySQL 8.4内の`fieldflow_e2e`専用DB | 開発データと分離してVue、NestJS、MySQLを接続した操作を確認する |
-| 性能試験 | Docker ComposeのMySQL 8.4内の`fieldflow_perf`専用DB | 通常・E2Eデータと分離して認証済み主要APIへ想定負荷をかける |
-| Cloudflare公開 | Aiven for MySQL 8.4 | Renderの一時filesystemから独立して、コンテスト・ポートフォリオのデータを永続化する |
-| AWS課題提出 | Amazon RDS for MySQL 8.4 | 中級編課題と実務構成検証の永続DBとして利用する |
+| 用途              | DB                                                  | 目的                                                                               |
+| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| ローカル開発      | Docker ComposeのMySQL 8.4（port `3306`）            | 開発データを保持し、Frontend・Backendから動作確認する                              |
+| Backend結合テスト | TestcontainersのMySQL 8.4                           | テストごとに隔離した実DBでMigration、制約、トランザクションを検証する              |
+| E2E               | Docker ComposeのMySQL 8.4内の`fieldflow_e2e`専用DB  | 開発データと分離してVue、NestJS、MySQLを接続した操作を確認する                     |
+| 性能試験          | Docker ComposeのMySQL 8.4内の`fieldflow_perf`専用DB | 通常・E2Eデータと分離して認証済み主要APIへ想定負荷をかける                         |
+| Cloudflare公開    | Aiven for MySQL 8.4                                 | Renderの一時filesystemから独立して、長期公開するポートフォリオのデータを永続化する |
+| AWS実務構成検証   | Amazon RDS for MySQL 8.4                            | AWSの実務構成を検証する永続DBとして利用する                                        |
 
 開発用DBを結合テストに流用せず、公開DBへE2E Seedやk6を向けない。これにより、テストによる開発・公開データの破壊を防ぎ、ローカルとCIで同じ条件を再現する。
 
@@ -51,25 +51,25 @@
 
 Issue番号は起票時に確定する。各行を原則1つのIssue・PRとして扱う。
 
-| 順序 | 実装単位 | 主な成果物 | 主な確認 |
-| ---: | --- | --- | --- |
-| 1 | 開発基盤 | Vue 3、NestJS、Tailwind CSS、Docker Compose MySQL、環境変数、Vite proxy、Swagger、health API | lint、型、単体テスト、build、3サービスの起動 |
-| 2 | CI基盤 | GitHub ActionsのFrontend・Backendジョブ、依存キャッシュ、成果物保存 | PR相当の全品質コマンドが自動成功すること |
-| 3 | DB基盤 | TypeORM設定、全Entity、初回Migration、`COMMON`カテゴリ・初期管理者Seed | TestcontainersでMigration、DB制約、Seedを検証 |
-| 4 | Backend認証・認可 | Login、Refreshローテーション、Logout、`/auth/me`、パスワード変更、JWT Guard、Role Guard | Service・Guard単体、認証API結合、秘密値非出力 |
-| 5 | Frontend認証・共通UI | ログイン、初回パスワード変更、Pinia、Axios、Refresh一重化、Router Guard、403・404、共通レイアウト | Vitest、Vue Testing Library、MSWで認証状態を検証 |
-| 6 | ユーザー管理 | 一覧、作成、編集、停止・再有効化、仮パスワード再発行、管理画面 | 最後の管理者・自己停止・自己降格・競合の単体／結合／画面テスト |
-| 7 | 作業カテゴリ管理 | 一覧、作成、編集、停止・再有効化、管理画面 | 名称重複、使用中停止、`COMMON`保護の単体／結合／画面テスト |
-| 8 | 道具管理 | 一覧、作成、編集、停止・再有効化、閲覧権限、管理画面 | 在庫境界、無効カテゴリ、権限、名称重複の単体／結合／画面テスト |
-| 9 | 日別表の作成・取得 | `FULL_DAY`／`SPLIT`、時間帯別カテゴリ、スナップショット、冪等作成、過去日取得 | Transaction、同時作成、方式不一致、スナップショットの結合テスト |
-| 10 | ホーム・日別表表示 | ホーム、作成・設定変更ダイアログ、表削除、日付選択、時間帯切替、カテゴリ・道具表示、旧版保持 | MSW画面テスト、変更・削除・再作成・競合のMySQL結合テスト |
-| 11 | 日別表の更新 | 数量・チェック自動保存、カテゴリ追加、過去日制限、楽観ロック、409からの復旧 | 数量境界、競合、カテゴリ重複、保存状態の単体／結合／画面テスト |
-| 12 | UI・アクセシビリティ仕上げ | モックとの差分解消、レスポンシブ、フォーカス、ダイアログ、通知、通信エラー表示 | 320px・390px・768px・1280px、キーボード操作、主要ラベルの確認 |
-| 13 | ログ・運用・セキュリティ強化 | JSONログ、requestId、例外Filter、認証イベント、マスキング、レート制限 | ログ結合、秘密値非出力、401・403・409・429・500の確認 |
-| 14 | E2E | Playwright設定、E2E Seed、認証・管理・日別チェックの主要シナリオ | E2E-AUTH、E2E-ADMIN、E2E-CHECKをChromiumで実行 |
-| 15 | 性能試験 | k6 smoke、日別チェック、道具一覧、結果記録 | 最大20 VU、p95 500ms未満、想定外エラー率1%未満 |
-| 16 | Cloudflare・Render・Aiven公開 | Workers Static Assets、Workers Free、Render Free、Aiven MySQL 8.4、TLS、Secrets、cold start UI | Docker build、proxy、TLS、公開URLの認証・主要操作、スリープ後の永続化確認 |
-| 17 | AWS・CD | Terraform、S3、CloudFront、ALB、ECS Fargate、ECR、RDS、監視、Migrationタスク、CD | `terraform fmt/validate/plan`、Migration後の段階的デプロイ確認 |
+| 順序 | 実装単位                      | 主な成果物                                                                                        | 主な確認                                                                  |
+| ---: | ----------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+|    1 | 開発基盤                      | Vue 3、NestJS、Tailwind CSS、Docker Compose MySQL、環境変数、Vite proxy、Swagger、health API      | lint、型、単体テスト、build、3サービスの起動                              |
+|    2 | CI基盤                        | GitHub ActionsのFrontend・Backendジョブ、依存キャッシュ、成果物保存                               | PR相当の全品質コマンドが自動成功すること                                  |
+|    3 | DB基盤                        | TypeORM設定、全Entity、初回Migration、`COMMON`カテゴリ・初期管理者Seed                            | TestcontainersでMigration、DB制約、Seedを検証                             |
+|    4 | Backend認証・認可             | Login、Refreshローテーション、Logout、`/auth/me`、パスワード変更、JWT Guard、Role Guard           | Service・Guard単体、認証API結合、秘密値非出力                             |
+|    5 | Frontend認証・共通UI          | ログイン、初回パスワード変更、Pinia、Axios、Refresh一重化、Router Guard、403・404、共通レイアウト | Vitest、Vue Testing Library、MSWで認証状態を検証                          |
+|    6 | ユーザー管理                  | 一覧、作成、編集、停止・再有効化、仮パスワード再発行、管理画面                                    | 最後の管理者・自己停止・自己降格・競合の単体／結合／画面テスト            |
+|    7 | 作業カテゴリ管理              | 一覧、作成、編集、停止・再有効化、管理画面                                                        | 名称重複、使用中停止、`COMMON`保護の単体／結合／画面テスト                |
+|    8 | 道具管理                      | 一覧、作成、編集、停止・再有効化、閲覧権限、管理画面                                              | 在庫境界、無効カテゴリ、権限、名称重複の単体／結合／画面テスト            |
+|    9 | 日別表の作成・取得            | `FULL_DAY`／`SPLIT`、時間帯別カテゴリ、スナップショット、冪等作成、過去日取得                     | Transaction、同時作成、方式不一致、スナップショットの結合テスト           |
+|   10 | ホーム・日別表表示            | ホーム、作成・設定変更ダイアログ、表削除、日付選択、時間帯切替、カテゴリ・道具表示、旧版保持      | MSW画面テスト、変更・削除・再作成・競合のMySQL結合テスト                  |
+|   11 | 日別表の更新                  | 数量・チェック自動保存、カテゴリ追加、過去日制限、楽観ロック、409からの復旧                       | 数量境界、競合、カテゴリ重複、保存状態の単体／結合／画面テスト            |
+|   12 | UI・アクセシビリティ仕上げ    | モックとの差分解消、レスポンシブ、フォーカス、ダイアログ、通知、通信エラー表示                    | 320px・390px・768px・1280px、キーボード操作、主要ラベルの確認             |
+|   13 | ログ・運用・セキュリティ強化  | JSONログ、requestId、例外Filter、認証イベント、マスキング、レート制限                             | ログ結合、秘密値非出力、401・403・409・429・500の確認                     |
+|   14 | E2E                           | Playwright設定、E2E Seed、認証・管理・日別チェックの主要シナリオ                                  | E2E-AUTH、E2E-ADMIN、E2E-CHECKをChromiumで実行                            |
+|   15 | 性能試験                      | k6 smoke、日別チェック、道具一覧、結果記録                                                        | 最大20 VU、p95 500ms未満、想定外エラー率1%未満                            |
+|   16 | Cloudflare・Render・Aiven公開 | Workers Static Assets、Workers Free、Render Free、Aiven MySQL 8.4、TLS、Secrets、cold start UI    | Docker build、proxy、TLS、公開URLの認証・主要操作、スリープ後の永続化確認 |
+|   17 | AWS・CD                       | Terraform、S3、CloudFront、ALB、ECS Fargate、ECR、RDS、監視、Migrationタスク、CD                  | `terraform fmt/validate/plan`、Migration後の段階的デプロイ確認            |
 
 現在はロードマップ1〜15を完了し、16は公開基盤のデプロイ・基本疎通と公開後UI改善まで完了して利用者操作smoke確認中、17は設計のみ完了して実装未着手である。
 
@@ -91,8 +91,8 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 - 道具は作業カテゴリに属するため、カテゴリ管理を先に完成させる。
 - 日別チェックはユーザー、カテゴリ、道具のスナップショットを使用するため、主要機能の中で最も下流に置く。
 - CIを早期に導入し、以降のすべてのPRで型、規約、テスト、ビルドの退行を検出する。
-- Cloudflare公開環境は完成したアプリ、Migration、ヘルスチェック、ログを低予算の長期公開へ接続し、コンテスト提出に必要な実URLを先に確保する。
-- AWS課題提出環境はCloudflare対応後に構築する。アプリと公開運用で得た知見をTerraform、ECS、RDS、CDへ反映し、インフラ仕様の手戻りを抑える。
+- Cloudflare公開環境は完成したアプリ、Migration、ヘルスチェック、ログを低予算の長期公開へ接続し、ポートフォリオ閲覧に必要な公開URLを先に確保する。
+- AWS実務構成検証環境はCloudflare対応後に構築する。アプリと公開運用で得た知見をTerraform、ECS、RDS、CDへ反映し、インフラ仕様の手戻りを抑える。
 
 ## 7. 各Issueの共通完了条件
 
@@ -159,5 +159,5 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 - [CI/CD設計](design/ci-cd.md)
 - [デプロイ環境の使い分け](design/deployment-strategy.md)
 - [Cloudflare・Render・Aiven公開構成](design/cloudflare-architecture.md)
-- [AWS・Terraform課題提出構成](design/aws-architecture.md)
+- [AWS・Terraform実務構成検証](design/aws-architecture.md)
 - [トレーサビリティ](design/traceability.md)

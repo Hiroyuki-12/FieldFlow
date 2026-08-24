@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-コンテスト審査と転職用ポートフォリオでFieldFlowを長期公開できるよう、VueをWorkers Static Assets、API入口をWorkers Free、NestJSをRender Free Web Service、MySQL 8.4をAiven Freeへ配置する。AWS課題提出環境とは分離し、無料枠を活用しながらCloudflareの単一公開URLからLoginと主要業務操作を確認できる状態を作る。
+ポートフォリオとしてFieldFlowを長期公開できるよう、VueをWorkers Static Assets、API入口をWorkers Free、NestJSをRender Free Web Service、MySQL 8.4をAiven Freeへ配置する。AWS実務構成検証環境とは分離し、無料枠を活用しながらCloudflareの単一公開URLからLoginと主要業務操作を確認できる状態を作る。
 
 設計整理はIssue [#39](https://github.com/Hiroyuki-12/FieldFlow/issues/39)、実装と外部リソース作成はIssue [#41](https://github.com/Hiroyuki-12/FieldFlow/issues/41)で管理する。当初予定したCloudflare Containersは採用せず、Workers Paidも契約しない。
 
@@ -120,7 +120,7 @@ Migration失敗時はRenderをdeployしない。Render healthを確認してか�
 3. Render URLが公開されていてもproxy共有鍵を要求する理由は何か。
 4. Render cold start中にhealthだけを自動再試行し、業務POSTを無条件再送しない理由は何か。
 5. MigrationをRender起動から分離する理由は何か。
-6. Cloudflare・Render・Aiven公開環境とAWS課題提出環境を分ける理由は何か。
+6. Cloudflare・Render・Aiven公開環境とAWS実務構成検証環境を分ける理由は何か。
 
 ## 9. 実施状況（2026-08-23）
 

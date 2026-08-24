@@ -1,10 +1,10 @@
-# AWS・Terraform課題提出構成
+# AWS・Terraform実務構成検証
 
 ## 1. 方針
 
-AIエンジニアコース中級編の課題提出と実務構成検証を目的に、RaiseTimeLineと同じ、EC2を管理しない学習用構成を採用する。フロントとAPIを1つのCloudFront URLへ集約し、ローカル・CI・AWS課題提出環境で同じコンテナとMySQLメジャーバージョンを使う。
+AWSの主要サービスとTerraformを組み合わせた実務構成検証を目的に、RaiseTimeLineと同じ、EC2を管理しない検証用構成を採用する。フロントとAPIを1つのCloudFront URLへ集約し、ローカル・CI・AWS実務構成検証環境で同じコンテナとMySQLメジャーバージョンを使う。
 
-コンテスト・転職用ポートフォリオの長期公開は[Cloudflare・Render・Aiven公開構成](cloudflare-architecture.md)が担当する。ALB、ECS Fargate、RDSは低アクセスでも固定的な稼働費用が発生するため、AWS環境は課題レビューと検証に必要な期間を確認して構築し、終了後はユーザー承認のもと停止・削除する。Terraformコード、plan、構成図、ログ、テスト結果を残し、必要時に再構築できる状態を成果とする。
+ポートフォリオの長期公開は[Cloudflare・Render・Aiven公開構成](cloudflare-architecture.md)が担当する。ALB、ECS Fargate、RDSは低アクセスでも固定的な稼働費用が発生するため、AWS環境は検証に必要な期間を確認して構築し、終了後はユーザー承認のもと停止・削除する。Terraformコード、plan、構成図、ログ、テスト結果を残し、必要時に再構築できる状態を成果とする。
 
 ## 2. 全体構成
 
@@ -27,17 +27,17 @@ flowchart TD
 
 ## 3. サービス別設計
 
-| サービス | 設計 |
-| --- | --- |
-| CloudFront | 単一入口。HTTPSへリダイレクトし、`/api/*`だけALBへ転送。APIキャッシュ無効 |
-| S3 frontend | Vueの`dist/`を保存。Public Access Block有効、OAC経由だけ読取 |
-| ALB | Public Subnet 2AZ。既定403、秘密ヘッダー一致時だけFargateへ転送 |
-| ECS Fargate | Public Subnet、公開IPあり、0.25 vCPU / 0.5GB、desired count 1、port 8080 |
-| ECR | backendイメージをcommit SHAタグで保存。`latest`をデプロイ識別に使わない |
-| RDS | MySQL 8.4、Private Subnet、Single-AZ、20GB gp3、暗号化、port 3306 |
-| SSM | DBパスワード、JWT鍵、Origin検証値をSecureString保存 |
-| CloudWatch | ECS標準出力のJSONログ、保持30日、アラーム通知先は導入時に設定 |
-| IAM | Execution RoleとTask Roleを分離し、必要最小限の権限を付与 |
+| サービス    | 設計                                                                      |
+| ----------- | ------------------------------------------------------------------------- |
+| CloudFront  | 単一入口。HTTPSへリダイレクトし、`/api/*`だけALBへ転送。APIキャッシュ無効 |
+| S3 frontend | Vueの`dist/`を保存。Public Access Block有効、OAC経由だけ読取              |
+| ALB         | Public Subnet 2AZ。既定403、秘密ヘッダー一致時だけFargateへ転送           |
+| ECS Fargate | Public Subnet、公開IPあり、0.25 vCPU / 0.5GB、desired count 1、port 8080  |
+| ECR         | backendイメージをcommit SHAタグで保存。`latest`をデプロイ識別に使わない   |
+| RDS         | MySQL 8.4、Private Subnet、Single-AZ、20GB gp3、暗号化、port 3306         |
+| SSM         | DBパスワード、JWT鍵、Origin検証値をSecureString保存                       |
+| CloudWatch  | ECS標準出力のJSONログ、保持30日、アラーム通知先は導入時に設定             |
+| IAM         | Execution RoleとTask Roleを分離し、必要最小限の権限を付与                 |
 
 画像機能はMVP対象外のため、RaiseTimeLineの画像用S3・`/media/*`ビヘイビア・画像IAM権限は移植しない。
 
@@ -48,11 +48,11 @@ flowchart TD
 - Private Subnetを2AZに各1つ配置し、RDS Subnet Groupにする。
 - NAT Gatewayは費用削減のため置かず、FargateはPublic SubnetからECR・SSM・Logsへ出る。
 
-| Security Group | Ingress |
-| --- | --- |
-| ALB SG | internetから80。ヘッダー不一致はListenerで403 |
-| Fargate SG | ALB SGから8080だけ |
-| RDS SG | Fargate SGから3306だけ |
+| Security Group | Ingress                                       |
+| -------------- | --------------------------------------------- |
+| ALB SG         | internetから80。ヘッダー不一致はListenerで403 |
+| Fargate SG     | ALB SGから8080だけ                            |
+| RDS SG         | Fargate SGから3306だけ                        |
 
 CloudFront→ALBがHTTPである点は独自ドメインなしの学習用制約として明記する。可用性・機密性要件が上がる場合は、独自ドメインとACMを導入してALBもHTTPS化し、FargateをPrivate Subnet＋VPC Endpointへ移す。
 
@@ -87,14 +87,14 @@ infra/
 - `*.tfvars`、state、planファイル、秘密値をGit管理しない。
 - 共通タグに`Project=fieldflow`、`Environment=prod`、`ManagedBy=terraform`を付与する。
 - `terraform fmt -check`、`validate`、`plan`をPRで確認し、`apply`・`destroy`はユーザー承認後だけ実行する。
-- AWS Budgetsと通知先を構築時に設定し、課題レビュー期間中も費用を確認する。
+- AWS Budgetsと通知先を構築時に設定し、検証期間中も費用を確認する。
 
 ## 8. 復旧・拡張
 
 - ECS障害はServiceがタスクを再作成する。RDS障害はバックアップから手動復旧する。
 - 規模拡大時はECS desired count 2以上、Auto Scaling、RDS Multi-AZ、NAT/VPC Endpoint、WAFを段階的に追加する。
 - RTO/RPOの保証が必要になった時点で、Single-AZと手動復旧方針を再設計する。
-- 課題レビュー終了後に削除する場合は、必要なログ、Terraform plan、E2E・k6結果、画面記録を先に保存する。審査中のURLを独断で停止しない。
+- 検証終了後に削除する場合は、必要なログ、Terraform plan、E2E・k6結果、画面記録を先に保存する。公開確認中のURLを独断で停止しない。
 
 ## 9. 参照資料
 

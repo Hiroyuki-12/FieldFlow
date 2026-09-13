@@ -59,7 +59,7 @@ JWTクレームは`sub`（userId）、`role`、`mustChangePassword`、`authVersi
 ### AWS実務構成検証環境
 
 - ユーザー→CloudFrontはHTTPSを強制する。独自ドメイン未取得のMVPではCloudFront既定証明書を使う。
-- ALB直アクセスはCloudFrontが付ける`X-Origin-Verify`秘密ヘッダーで拒否する。
+- CloudFront→ALBは、独自ドメインを持たない検証環境ではHTTPとする。ALB直アクセスはCloudFrontが付ける`X-FieldFlow-Proxy-Secret`秘密ヘッダーで拒否する。
 - Fargate 8080はALB Security Groupからだけ、RDS 3306はFargate Security Groupからだけ許可する。
 - DBパスワード、JWT鍵、Origin検証値をSSM SecureStringで管理し、Terraform stateと`tfvars`を公開しない。
 - ECS Task RoleとExecution Roleを分け、ECR pull、Logs、SSM読取を必要最小限にする。

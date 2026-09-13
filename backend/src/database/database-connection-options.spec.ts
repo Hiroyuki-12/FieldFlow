@@ -1,6 +1,7 @@
 import {
   createDatabaseConnectionOptions,
   decodeDatabaseTlsCa,
+  readDatabaseTlsCaFile,
 } from './database-connection-options';
 
 const TEST_CA = [
@@ -53,7 +54,30 @@ describe('database connection options', () => {
         connectTimeoutMs: 10_000,
         tlsEnabled: true,
       }),
-    ).toThrow('DB_TLS_CA_BASE64');
+    ).toThrow('DB_TLS_CA_BASE64 or DB_TLS_CA_FILE');
+  });
+
+  it('ECS用のRDS CA fileを読み、証明書検証を必須にする', () => {
+    const options = createDatabaseConnectionOptions({
+      poolLimit: 5,
+      connectTimeoutMs: 10_000,
+      tlsEnabled: true,
+      tlsCaFile: 'certs/ap-northeast-1-bundle.pem',
+    });
+
+    expect(options.ssl).toMatchObject({
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2',
+    });
+    expect(options.ssl?.ca.match(/-----BEGIN CERTIFICATE-----/g)).toHaveLength(
+      3,
+    );
+  });
+
+  it('存在しないCA fileをDB接続前に拒否する', () => {
+    expect(() => readDatabaseTlsCaFile('/not-found/rds-ca.pem')).toThrow(
+      'DB_TLS_CA_FILE',
+    );
   });
 
   it('PEM証明書ではないBase64値を拒否する', () => {

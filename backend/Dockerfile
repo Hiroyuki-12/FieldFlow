@@ -24,6 +24,8 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+# RDSとのTLS接続で接続先を検証する公開CA。秘密情報ではなく、更新履歴をimageと一緒に管理する。
+COPY --chown=node:node certs ./certs
 
 # root権限を持たない公式nodeユーザーで起動し、侵害時のContainer内操作範囲を狭める。
 USER node

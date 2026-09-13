@@ -12,7 +12,7 @@ AWSの主要サービスとTerraformを組み合わせた実務構成検証を�
 flowchart TD
     U[利用者] -->|HTTPS| CF[CloudFront]
     CF -->|既定パス| S3["S3 Frontend<br/>Private + OAC"]
-    CF -->|/api/* + X-Origin-Verify| ALB[ALB HTTP Listener]
+    CF -->|HTTP /api/* + X-FieldFlow-Proxy-Secret| ALB[ALB HTTP Listener]
     ALB -->|8080| ECS["ECS Fargate<br/>NestJS 1 task"]
     ECS -->|3306| RDS["RDS MySQL 8.4<br/>Private / Single-AZ"]
     ECR[ECR] --> ECS
@@ -34,9 +34,9 @@ flowchart TD
 | ALB         | Public Subnet 2AZ。既定403、秘密ヘッダー一致時だけFargateへ転送           |
 | ECS Fargate | Public Subnet、公開IPあり、0.25 vCPU / 0.5GB、desired count 1、port 8080  |
 | ECR         | backendイメージをcommit SHAタグで保存。`latest`をデプロイ識別に使わない   |
-| RDS         | MySQL 8.4、Private Subnet、Single-AZ、20GB gp3、暗号化、port 3306         |
-| SSM         | DBパスワード、JWT鍵、Origin検証値をSecureString保存                       |
-| CloudWatch  | ECS標準出力のJSONログ、保持30日、アラーム通知先は導入時に設定             |
+| RDS         | MySQL 8.4.11、db.t4g.micro、Private Subnet、Single-AZ、20GB gp3、暗号化、port 3306 |
+| SSM         | DB password、JWT鍵、Origin検証値、初期管理者passwordをSecureString保存     |
+| CloudWatch  | ECS標準出力のJSONログを30日保持。短期検証中は画面で手動確認              |
 | IAM         | Execution RoleとTask Roleを分離し、必要最小限の権限を付与                 |
 
 画像機能はMVP対象外のため、RaiseTimeLineの画像用S3・`/media/*`ビヘイビア・画像IAM権限は移植しない。
@@ -59,13 +59,13 @@ CloudFront→ALBがHTTPである点は独自ドメインなしの学習用制約
 ## 5. CloudFront
 
 - 既定ビヘイビアはS3、`/api/*`はALB。
-- SPAルートのS3 404だけを`/index.html`の200へ置換する。APIの401/403/404は置換しない。
+- CloudFront Functionで拡張子のない非API pathだけを`/index.html`へrewriteする。Distribution全体のcustom errorは使わず、APIの401/403/404を置換しない。
 - APIは全HTTPメソッドを許可し、Query、Authorization、Cookieを必要な範囲で転送する。
 - 独自ドメイン未取得のMVPではCloudFront既定証明書を使う。
 
 ## 6. RDS・バックアップ
 
-- `db.t3.micro`相当の学習用クラス、Single-AZ、削除保護なしを初期値とする。利用可能クラスとMySQL 8.4対応は実装時に再確認する。
+- 2026-09-10に東京Region APIでMySQL 8.4.11と`db.t4g.micro` / gp3の提供を確認した。学習用は`db.t4g.micro`、Single-AZ、削除保護なしとする。
 - 自動バックアップを7日保持し、ストレージ暗号化と自動マイナーバージョン更新を有効にする。
 - `terraform destroy`前は必要に応じて手動スナップショットを作る。学習環境の既定は最終スナップショットなしだが、実運用では逆にする。
 - Migrationは新イメージを使う一回限りECSタスクで先に実行し、成功後にServiceを更新する。
@@ -83,11 +83,13 @@ infra/
 └── terraform.tfvars.example
 ```
 
-- stateは暗号化・バージョニング済みS3、ロックはDynamoDBを使用する。
-- `*.tfvars`、state、planファイル、秘密値をGit管理しない。
-- 共通タグに`Project=fieldflow`、`Environment=prod`、`ManagedBy=terraform`を付与する。
+- stateは暗号化・バージョニング済みS3へ保存し、Terraform 1.10以降のS3 native lockを使用する。追加費用と構成要素を増やさないためDynamoDB lock tableは作らない。
+- `*.tfvars`、`backend.hcl`、state、planファイル、秘密値をGit管理しない。password等の乱数はSSM SecureStringへ保存し、生成値を含む暗号化remote stateも機密として扱う。
+- 共通タグに`Project=fieldflow`、`Environment=validation`、`ManagedBy=terraform`を付与する。
 - `terraform fmt -check`、`validate`、`plan`をPRで確認し、`apply`・`destroy`はユーザー承認後だけ実行する。
-- AWS Budgetsと通知先を構築時に設定し、検証期間中も費用を確認する。
+- 2026-09-12のユーザー判断により、RaiseTimeLineと同様にAWS Budgets・SNS・CloudWatch Alarmは作らない。費用はBilling画面とCost Explorerで手動確認し、動画撮影後すぐにdestroyする。
+
+実装は`infra/`へ配置した。初回applyではECS Serviceを0 Taskで作り、GitHub Environment承認後のCDがMigrationと冪等Seedに成功した場合だけ1 Taskへ更新する。NAT Gateway、Multi-AZ、Auto Scaling、WAFは作らない。
 
 ## 8. 復旧・拡張
 

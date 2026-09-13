@@ -60,7 +60,7 @@ Cloudflare公開環境とAWS実務構成検証環境は、どちらもBackendの
 - Cloudflare公開環境はWorkers Static Assets、Workers Free、Render Free、Aiven Freeから開始し、月額固定費0 USDを前提にする。
 - Workers Freeは100,000 requests/day、Render Freeは750 instance hours/month・15分idle停止・outbound/build/bandwidth枠がある。上限超過時の停止条件を確認する。
 - Aivenは1 GB disk、最大76接続、休止条件、SLA対象外という制限を定期的に再確認する。
-- AWS実務構成検証環境はTerraform planで作成対象を確認し、AWS Budgetsも設定する。
+- AWS実務構成検証環境はTerraform planで作成対象を確認し、Billing画面とCost Explorerで費用を手動確認する。
 - AWS環境は検証と公開確認に必要な期間を確認してから停止・削除する。URLが必要な期間に独断で破棄しない。
 - 料金・無料枠は変更されるため、金額をコード上の保証値として扱わない。
 

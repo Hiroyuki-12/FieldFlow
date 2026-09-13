@@ -21,7 +21,7 @@ AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Farg
 
 - VPC、Public / Private Subnet、Route Table、Security Group
 - S3、CloudFront、ALB、ECR、ECS Cluster・Task Definition・Service
-- RDS MySQL 8.4、SSM Parameter Store、CloudWatch Logs、AWS Budgets
+- RDS MySQL 8.4、SSM Parameter Store、CloudWatch Logs
 - 環境別変数、共通Tag、remote state方針
 
 ### Frontend・Backend
@@ -29,7 +29,7 @@ AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Farg
 - Vue build成果物のS3配置とCloudFront配信
 - `/api/*`のCloudFront→ALB→ECSルーティング
 - NestJS Containerのport `8080`とhealth check
-- CloudFrontからALBへのOrigin検証、HTTPS、Cookie、CORS、`TRUST_PROXY_HOPS=2`
+- CloudFrontからALBへの秘密ヘッダーによるOrigin検証、利用者からCloudFrontまでのHTTPS、Cookie、CORS、`TRUST_PROXY_HOPS=2`
 - ECS Task RoleとExecution Roleの最小権限化
 
 ### DB・Migration
@@ -63,7 +63,7 @@ AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Farg
 4. Backend imageをECRへ登録し、一回限りECS TaskでMigrationと必要な初期Seedを実行する。
 5. Migration成功後にECS Serviceを更新し、ALB healthとAPIを確認する。
 6. FrontendをS3へ配置し、CloudFrontの同一オリジンから画面・API・認証を確認する。
-7. CloudWatch、Budgets、バックアップ、CD、復旧手順を確認する。
+7. CloudWatch Logs、Billing画面、バックアップ、CD、復旧手順を確認する。
 8. 検証結果として残すURL、構成図、Terraform plan、テスト・ログ証跡を整理する。
 9. レビュー終了後、保存すべき証跡とSnapshotを確認し、ユーザー承認後に停止・削除する。
 
@@ -75,7 +75,7 @@ AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Farg
 - CloudFront URLからVue、health、ログイン、Refresh、主要業務APIを確認
 - ALB直アクセス拒否、Security Group、SSM秘密値非出力の確認
 - CloudWatch LogsをrequestIdで追跡
-- RDS backup・復旧手順とAWS Budgets通知の確認
+- RDS backup・復旧手順とBilling画面・Cost Explorerでの費用確認
 
 ## 7. 完了条件
 
@@ -103,3 +103,13 @@ AWSの実務構成検証として、FieldFlowをS3、CloudFront、ALB、ECS Farg
 - [CI/CD設計](../design/ci-cd.md)
 - [セキュリティ設計](../design/security.md)
 - [ログ・監視・バックアップ設計](../design/operations.md)
+
+## 10. 実装結果（Issue #61）
+
+- `infra/`へVPC、2AZ Public/Private Subnet、SG、private S3/OAC、CloudFront、ALB、ECR、ECS Fargate、RDS MySQL 8.4.11、SSM、CloudWatch Logs、OIDC IAMを実装した。
+- RaiseTimeLineと同じNATなし・Public Subnet Fargate・Private RDSの費用抑制構成を基礎にし、FieldFlowではcommit SHAのimmutable image、Migration/Seed先行CD、S3 native state lockへ更新した。
+- `backend/certs/`へAWS公式東京Region RDS CA bundleを同梱し、`DB_TLS_CA_FILE`から読めるようにした。通常稼働Taskへ初期管理者passwordを渡さず、Seed専用Taskだけに注入する。
+- `.github/workflows/ci.yml`へTerraform fmt/validateを追加し、`.github/workflows/aws-deploy.yml`へ`aws-validation`承認、OIDC、ECR push、Migration、Seed、ECS更新、S3 sync、CloudFront invalidation、health確認を実装した。
+- 2026-09-12のユーザー判断により、RaiseTimeLineにないAWS Budgets・SNS・CloudWatch Alarmは実装対象から外した。短期検証と動画撮影後の即時destroy、Billing画面・Cost Explorerでの手動確認により費用を管理する。
+- 2026-09-12にmain applyとdeployを実施し、CloudFrontからのログイン、道具・カテゴリ登録、日別チェック更新、再読み込み後の保存内容、ALB直接アクセス拒否、ECS・RDS・CloudWatch Logsを確認した。Terraform、Frontend、Backendの品質チェックも成功した。
+- 検証終了後、ユーザー承認を得てTerraform管理下の60リソースをdestroyした。続けてremote stateの全version・削除markerとbootstrap用S3 bucketを削除し、RDS snapshot、自動backup、ALB、ECS、ECR、CloudFront、S3、VPC、Elastic IP、NAT Gateway、CloudWatch Logs、SSM、関連IAMに残存がないことをAWS APIで確認した。

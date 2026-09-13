@@ -1,0 +1,4 @@
+# `infra/bootstrap`のoutputを転記する。Account固有値なので実ファイルはGit管理しない。
+bucket = "fieldflow-validation-tfstate-123456789012"
+key    = "fieldflow/validation/terraform.tfstate"
+region = "ap-northeast-1"

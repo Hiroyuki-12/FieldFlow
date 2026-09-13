@@ -33,6 +33,7 @@ export function createTypeOrmOptions(
       ),
       tlsEnabled: configService.getOrThrow<boolean>('DB_TLS_ENABLED'),
       tlsCaBase64: configService.get<string>('DB_TLS_CA_BASE64'),
+      tlsCaFile: configService.get<string>('DB_TLS_CA_FILE'),
     }),
     // EntityはTypeScriptとDBの対応表として使い、Entityとの差分をDBへ自動反映させない。
     // 自動反映を許すと、名前変更を列削除＋再作成と判断してデータを失う可能性があるため、

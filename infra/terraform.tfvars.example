@@ -1,0 +1,8 @@
+# 秘密値はtfvarsへ書かない。DB・JWT・Origin検証値はTerraformが生成してSSMへ保存する。
+aws_region = "ap-northeast-1"
+
+deletion_protection      = false
+enable_container_insights = false
+
+# AWS AccountにGitHub OIDC providerが既にある場合だけ指定し、重複作成を避ける。
+# existing_github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"

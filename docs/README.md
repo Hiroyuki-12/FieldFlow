@@ -27,6 +27,7 @@
 - [AWS・Terraform実務構成検証](design/aws-architecture.md)
 - [ログ・監視・バックアップ](design/operations.md)
 - [Cloudflare・Render・Aiven運用手順](operations/cloudflare-deployment.md)
+- [AWS検証環境の構築・CD・停止手順](../infra/README.md)
 - [非機能要件](design/non-functional-requirements.md)
 - [テスト戦略](design/test-strategy.md)
 - [CI/CD設計](design/ci-cd.md)

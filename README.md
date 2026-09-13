@@ -130,7 +130,7 @@ flowchart LR
 
 ## 現在の状態と今後の改善
 
-MVPのアプリケーション機能、セキュリティ、ログ、E2E、性能試験、Cloudflare公開基盤まで実装済みです。
+MVPのアプリケーション機能、セキュリティ、ログ、E2E、性能試験、Cloudflare公開基盤に加え、AWS検証環境のTerraformと承認付きCDまで実装済みです。AWS実環境へのapply・deployと主要操作の検証も完了し、検証環境は継続課金を止めるためdestroy済みです。
 
 ### 業務機能として実現したいこと
 
@@ -154,7 +154,7 @@ MVPのアプリケーション機能、セキュリティ、ログ、E2E、性�
 - 複数チーム・複数組織への対応
 - パスワード再設定やMFAなどのアカウント管理
 - 写真、保管場所、貸出・返却などの道具情報
-- Terraform、ECS Fargate、RDS、S3、CloudFront、ALBを使ったAWS構成の実装
+- AWS検証環境を再構築するときのAWS仕様・利用料金の再確認
 
 ## ディレクトリ構成
 
@@ -165,6 +165,7 @@ FieldFlow/
 ├── cloudflare/  # Workers Static AssetsとRender API proxy
 ├── e2e/         # Playwrightの主要操作・レスポンシブE2E
 ├── perf/        # k6シナリオと性能試験専用データ準備
+├── infra/       # AWS検証環境のTerraform、remote state bootstrap、運用手順
 ├── docs/        # 現行仕様、設計、運用手順、実装履歴
 ├── mock/        # 初期の画面遷移確認用モック
 ├── compose.yaml # ローカルMySQL 8.4

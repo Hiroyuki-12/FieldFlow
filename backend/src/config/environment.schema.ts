@@ -1,4 +1,5 @@
 import Joi from 'joi';
+import { isAbsolute } from 'node:path';
 
 import { decodeDatabaseTlsCa } from '../database/database-connection-options';
 
@@ -11,6 +12,11 @@ const databaseTlsCaSchema = Joi.string().custom((value: string, helpers) => {
     return helpers.error('any.invalid');
   }
 });
+
+const databaseTlsCaFileSchema = Joi.string().custom(
+  (value: string, helpers) =>
+    isAbsolute(value) ? value : helpers.error('any.invalid'),
+);
 
 /**
  * 起動時に環境変数を検証し、誤った接続先や未設定の秘密値で動き続けることを防ぐ。
@@ -61,7 +67,17 @@ export const environmentValidationSchema = Joi.object({
   // 本番CAは平文ファイルへ置かず、Cloudflare SecretからBase64文字列として注入する。
   DB_TLS_CA_BASE64: databaseTlsCaSchema.when('DB_TLS_ENABLED', {
     is: true,
-    then: databaseTlsCaSchema.required(),
+    then: databaseTlsCaSchema.when('DB_TLS_CA_FILE', {
+      is: Joi.exist(),
+      then: Joi.forbidden(),
+      otherwise: databaseTlsCaSchema.required(),
+    }),
+    otherwise: Joi.forbidden(),
+  }),
+  // ECSでは公開CA bundleをimageへ同梱し、Task Definitionへ長いCA本文を載せない。
+  DB_TLS_CA_FILE: databaseTlsCaFileSchema.when('DB_TLS_ENABLED', {
+    is: true,
+    then: databaseTlsCaFileSchema.optional(),
     otherwise: Joi.forbidden(),
   }),
   // JWT鍵はソースへ直書きせず、推測困難な32byte以上の秘密値を環境から注入する。

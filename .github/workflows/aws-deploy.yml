@@ -1,0 +1,181 @@
+name: AWS Validation Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: DEPLOYと入力した場合だけAWS検証環境を更新する
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-validation-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migration first deployment
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DEPLOY'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # GitHub側でrequired reviewersを設定し、承認前はOIDC credentialを発行させない。
+    environment: aws-validation
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+      AWS_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+      AWS_ECS_SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+      AWS_ECS_TASK_FAMILY: ${{ vars.AWS_ECS_TASK_FAMILY }}
+      AWS_ECS_SEED_TASK_FAMILY: ${{ vars.AWS_ECS_SEED_TASK_FAMILY }}
+      AWS_FRONTEND_BUCKET: ${{ vars.AWS_FRONTEND_BUCKET }}
+      AWS_CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+      AWS_CLOUDFRONT_URL: ${{ vars.AWS_CLOUDFRONT_URL }}
+
+    steps:
+      - name: ソースコードを取得する
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Environment variablesを検証する
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${AWS_REGION:?AWS_REGION is required}"
+          : "${AWS_DEPLOY_ROLE_ARN:?AWS_DEPLOY_ROLE_ARN is required}"
+          : "${AWS_ECR_REPOSITORY:?AWS_ECR_REPOSITORY is required}"
+          : "${AWS_ECS_CLUSTER:?AWS_ECS_CLUSTER is required}"
+          : "${AWS_ECS_SERVICE:?AWS_ECS_SERVICE is required}"
+          : "${AWS_ECS_TASK_FAMILY:?AWS_ECS_TASK_FAMILY is required}"
+          : "${AWS_ECS_SEED_TASK_FAMILY:?AWS_ECS_SEED_TASK_FAMILY is required}"
+          : "${AWS_FRONTEND_BUCKET:?AWS_FRONTEND_BUCKET is required}"
+          : "${AWS_CLOUDFRONT_DISTRIBUTION_ID:?AWS_CLOUDFRONT_DISTRIBUTION_ID is required}"
+          : "${AWS_CLOUDFRONT_URL:?AWS_CLOUDFRONT_URL is required}"
+
+      - name: GitHub OIDCでAWSへ接続する
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: fieldflow-${{ github.run_id }}
+
+      - name: ECRへloginする
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - name: commit SHA imageをbuild・pushする
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_URI="${ECR_REGISTRY}/${AWS_ECR_REPOSITORY}:${IMAGE_TAG}"
+          echo "IMAGE_URI=${IMAGE_URI}" >> "${GITHUB_ENV}"
+
+          # ECRはimmutable。workflow再実行時に同じSHAを上書きせず、既存imageを再利用する。
+          if aws ecr describe-images --repository-name "${AWS_ECR_REPOSITORY}" --image-ids "imageTag=${IMAGE_TAG}" > /dev/null 2>&1; then
+            echo "The immutable image already exists; skip push."
+          else
+            docker build --tag "${IMAGE_URI}" backend
+            docker push "${IMAGE_URI}"
+          fi
+
+      - name: 新imageのApplication・Seed Task Definitionを登録する
+        shell: bash
+        run: |
+          set -euo pipefail
+          register_revision() {
+            local family="$1"
+            local output_name="$2"
+            local source_file="${family}-source.json"
+            local deploy_file="${family}-deploy.json"
+
+            aws ecs describe-task-definition --task-definition "${family}" --query taskDefinition > "${source_file}"
+            jq --arg image "${IMAGE_URI}" 'del(.compatibilities,.registeredAt,.registeredBy,.requiresAttributes,.revision,.status,.taskDefinitionArn) | .containerDefinitions[0].image = $image' "${source_file}" > "${deploy_file}"
+
+            local task_definition_arn
+            task_definition_arn="$(aws ecs register-task-definition --cli-input-json "file://${deploy_file}" --query 'taskDefinition.taskDefinitionArn' --output text)"
+            echo "${output_name}=${task_definition_arn}" >> "${GITHUB_ENV}"
+          }
+
+          register_revision "${AWS_ECS_TASK_FAMILY}" "TASK_DEFINITION_ARN"
+          register_revision "${AWS_ECS_SEED_TASK_FAMILY}" "SEED_TASK_DEFINITION_ARN"
+
+      - name: ECS network設定を取得する
+        shell: bash
+        run: |
+          set -euo pipefail
+          NETWORK_CONFIGURATION="$(aws ecs describe-services --cluster "${AWS_ECS_CLUSTER}" --services "${AWS_ECS_SERVICE}" --query 'services[0].networkConfiguration' --output json | jq -c '.')"
+          jq -e '.awsvpcConfiguration.subnets | length > 0' <<< "${NETWORK_CONFIGURATION}" > /dev/null
+          echo "NETWORK_CONFIGURATION=${NETWORK_CONFIGURATION}" >> "${GITHUB_ENV}"
+
+      - name: 一回限りMigration Taskを実行する
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASK_ARN="$(aws ecs run-task --cluster "${AWS_ECS_CLUSTER}" --launch-type FARGATE --task-definition "${TASK_DEFINITION_ARN}" --network-configuration "${NETWORK_CONFIGURATION}" --overrides '{"containerOverrides":[{"name":"backend","command":["node","node_modules/typeorm/cli.js","migration:run","-d","dist/database/data-source.js"]}]}' --query 'tasks[0].taskArn' --output text)"
+          if [[ -z "${TASK_ARN}" || "${TASK_ARN}" == "None" ]]; then
+            echo "Migration task was not started." >&2
+            exit 1
+          fi
+
+          aws ecs wait tasks-stopped --cluster "${AWS_ECS_CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT_CODE="$(aws ecs describe-tasks --cluster "${AWS_ECS_CLUSTER}" --tasks "${TASK_ARN}" --query 'tasks[0].containers[?name==`backend`].exitCode | [0]' --output text)"
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            aws ecs describe-tasks --cluster "${AWS_ECS_CLUSTER}" --tasks "${TASK_ARN}" --query 'tasks[0].{stoppedReason:stoppedReason,containerReason:containers[0].reason}' --output json
+            echo "Migration failed; ECS Service was not updated." >&2
+            exit 1
+          fi
+
+      - name: COMMON categoryと初期管理者を冪等Seedする
+        shell: bash
+        run: |
+          set -euo pipefail
+          TASK_ARN="$(aws ecs run-task --cluster "${AWS_ECS_CLUSTER}" --launch-type FARGATE --task-definition "${SEED_TASK_DEFINITION_ARN}" --network-configuration "${NETWORK_CONFIGURATION}" --query 'tasks[0].taskArn' --output text)"
+          if [[ -z "${TASK_ARN}" || "${TASK_ARN}" == "None" ]]; then
+            echo "Seed task was not started." >&2
+            exit 1
+          fi
+
+          aws ecs wait tasks-stopped --cluster "${AWS_ECS_CLUSTER}" --tasks "${TASK_ARN}"
+          EXIT_CODE="$(aws ecs describe-tasks --cluster "${AWS_ECS_CLUSTER}" --tasks "${TASK_ARN}" --query 'tasks[0].containers[?name==`backend`].exitCode | [0]' --output text)"
+          if [[ "${EXIT_CODE}" != "0" ]]; then
+            echo "Seed failed; ECS Service was not updated." >&2
+            exit 1
+          fi
+
+      - name: Migration・Seed済みrevisionへServiceを更新する
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws ecs update-service --cluster "${AWS_ECS_CLUSTER}" --service "${AWS_ECS_SERVICE}" --task-definition "${TASK_DEFINITION_ARN}" --desired-count 1 > /dev/null
+          aws ecs wait services-stable --cluster "${AWS_ECS_CLUSTER}" --services "${AWS_ECS_SERVICE}"
+
+      - name: Node.jsとFrontend依存を準備する
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: FrontendをbuildしてS3へ配置する
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          VITE_API_BASE_URL=/api/v1 npm run build
+          # Versioningを有効にしているため、誤同期時も旧objectを復旧できる。
+          aws s3 sync dist/ "s3://${AWS_FRONTEND_BUCKET}" --delete
+
+      - name: CloudFront cacheを無効化する
+        run: aws cloudfront create-invalidation --distribution-id "${AWS_CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
+
+      - name: CloudFront経由のhealthを確認する
+        shell: bash
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 10 --retry-all-errors "${AWS_CLOUDFRONT_URL}/api/health" > /dev/null

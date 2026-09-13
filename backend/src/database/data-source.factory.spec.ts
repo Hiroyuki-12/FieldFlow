@@ -66,6 +66,6 @@ describe('createDatabaseDataSource', () => {
         ...validEnvironment,
         DB_TLS_ENABLED: 'true',
       }),
-    ).toThrow('DB_TLS_CA_BASE64');
+    ).toThrow('DB_TLS_CA_BASE64 or DB_TLS_CA_FILE');
   });
 });

@@ -96,6 +96,29 @@ describe('environmentValidationSchema', () => {
     expect(result.error).toBeUndefined();
   });
 
+  it('AWS ECSではimage同梱のRDS CA fileを受け入れる', () => {
+    const result = environmentValidationSchema.validate({
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      DB_TLS_ENABLED: true,
+      DB_TLS_CA_FILE: '/app/certs/ap-northeast-1-bundle.pem',
+      COOKIE_SECURE: true,
+    });
+
+    expect(result.error).toBeUndefined();
+  });
+
+  it('TLS CAのBase64とfileの同時指定を拒否する', () => {
+    const result = environmentValidationSchema.validate({
+      ...validEnvironment,
+      DB_TLS_ENABLED: true,
+      DB_TLS_CA_BASE64: testCaBase64,
+      DB_TLS_CA_FILE: '/app/certs/ap-northeast-1-bundle.pem',
+    });
+
+    expect(result.error?.message).toContain('DB_TLS_CA_BASE64');
+  });
+
   it('本番でTLSを無効にする設定を拒否する', () => {
     // 公開ネットワーク上のDB通信が平文または未検証になる前に起動を止める。
     const result = environmentValidationSchema.validate({

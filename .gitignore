@@ -40,3 +40,4 @@ cloudflare/.dev.vars
 crash.log
 tfplan
 tfplan*
+backend.hcl

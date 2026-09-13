@@ -78,7 +78,7 @@ NestJSは1イベント1行のJSONを標準出力へ出す。Cloudflare公開環�
 | RDS storage      | 空き20%未満         | 容量拡張、不要データ調査     |
 | RDS connections  | 上限80%以上         | connection pool確認          |
 
-通知先はAWS構築時にSNS等で設定し、設計書へ実値を追記する。
+短期検証ではCloudWatch AlarmやSNS通知を作らず、動画撮影中にCloudWatch MetricsとLogsを手動確認する。2026-09-12のユーザー判断により、RaiseTimeLineと同じ構築範囲を優先した。
 
 ## 6. 保持・バックアップ
 

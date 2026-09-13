@@ -70,7 +70,7 @@ k6性能試験は通常PRのRequired checkへ含めず、リリース候補、�
 
 ## 3. CD
 
-現時点ではGitHub Actionsによる自動CDは未実装である。Cloudflare公開環境は承認後に手動でMigration、Render deploy、Wrangler deployを行っており、以下は再現可能な手動手順と今後自動化する際の目標フローを示す。AWS実務構成検証環境のCDはロードマップ17の対象である。
+Cloudflare公開環境は承認後に手動でMigration、Render deploy、Wrangler deployを行う。AWS実務構成検証環境には`.github/workflows/aws-deploy.yml`を実装し、`main`の手動実行、`DEPLOY`確認入力、GitHub Environment承認の三条件が揃った場合だけ更新する。
 
 ### 3.1 Cloudflare公開環境
 
@@ -101,22 +101,24 @@ flowchart TD
     CI --> A[aws-validation承認]
     A --> OIDC[AWS OIDC認証]
     OIDC --> IMG["Backend build/push<br/>ECR:commit SHA"]
-    OIDC --> WEB["Frontend build<br/>S3 upload"]
     IMG --> MIG["ECS one-off<br/>TypeORM migration"]
-    MIG -->|成功| ECS[ECS service更新]
+    MIG -->|成功| SEED[ECS one-off<br/>initial seed]
+    SEED -->|成功| ECS[ECS service更新]
     MIG -->|失敗| STOP[デプロイ停止]
-    ECS --> HC[ALB health確認]
+    ECS --> WEB["Frontend build<br/>S3 upload"]
     WEB --> INV[CloudFront invalidation]
+    INV --> HC[CloudFront health確認]
 ```
 
 - AWS固定アクセスキーをGitHub Secretsへ置かず、OIDCと最小権限IAM Roleを使用する。
 - Backendイメージはcommit SHAタグで指定し、どのコードが動いているか追跡可能にする。
 - Migration失敗時はECS Serviceを更新しない。アプリ失敗時は直前のイメージタグへ戻せるようTask Definition revisionを保持する。
+- Seedは通常Serviceと別Task Definitionへ初期passwordを注入して実行し、通常稼働Taskへ初期passwordを渡さない。既存管理者を更新しない冪等処理のため再deployでもpasswordを巻き戻さない。
 - Frontendはビルド後にS3へ同期し、CloudFront invalidationを行う。削除対象を含む同期は差分を確認する。
 
 ## 4. Terraform
 
-- 現在は`infra/`とTerraform用Workflowが未実装であり、以下はロードマップ17で導入する方針とする。
+- `infra/`とCIのTerraform jobを実装済みである。CIはremote backendやAWS credentialを使わず、`init -backend=false`、`fmt -check -recursive`、`validate`を実行する。
 - PRで`terraform fmt -check`と`terraform validate`を行う。
 - `plan`はAWS認証が利用できる安全なイベントで生成し、秘密値をartifactへ含めない。
 - `apply`と`destroy`は自動実行せず、差分・影響・復旧方法を説明してユーザー承認後に行う。

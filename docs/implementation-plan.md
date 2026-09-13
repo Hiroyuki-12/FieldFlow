@@ -22,7 +22,7 @@
 - 日別項目の数量・チェック更新APIと行別自動保存、楽観ロック競合復旧、作成済み時間帯へのカテゴリ追加は実装済み。
 - UI・アクセシビリティ全体仕上げ、ログ・運用・セキュリティ強化、Playwright E2E、k6性能試験は実装済み。
 - 公開後の確認を基に、認証画面、共通ヘッダーナビゲーション、ホーム、各ダイアログ、日別チェックの状態表示・削除導線を改善し、320pxからデスクトップまでの回帰テストを追加済み。
-- Cloudflare・Render・Aiven公開基盤はデプロイと基本疎通まで完了し、利用者操作smoke確認中。AWS環境は設計済みだが、Terraformと実環境は未実装・未デプロイ。
+- Cloudflare・Render・Aiven公開基盤はデプロイと基本疎通まで完了し、利用者操作smoke確認中。AWS環境はTerraform、CI、承認付きCD、実環境へのapply・deploy、主要操作の検証まで完了し、検証後にdestroy済み。
 - モックは初期の画面構成と操作フローを振り返る資料として残す。現在の仕様は要件・機能・設計資料とVue実装を基準とし、後続のUI改善をモックへ逆反映する前提にはしない。
 
 ## 3. 実装方針
@@ -71,7 +71,7 @@ Issue番号は起票時に確定する。各行を原則1つのIssue・PRとし�
 |   16 | Cloudflare・Render・Aiven公開 | Workers Static Assets、Workers Free、Render Free、Aiven MySQL 8.4、TLS、Secrets、cold start UI    | Docker build、proxy、TLS、公開URLの認証・主要操作、スリープ後の永続化確認 |
 |   17 | AWS・CD                       | Terraform、S3、CloudFront、ALB、ECS Fargate、ECR、RDS、監視、Migrationタスク、CD                  | `terraform fmt/validate/plan`、Migration後の段階的デプロイ確認            |
 
-現在はロードマップ1〜15を完了し、16は公開基盤のデプロイ・基本疎通と公開後UI改善まで完了して利用者操作smoke確認中、17は設計のみ完了して実装未着手である。
+現在はロードマップ1〜15を完了し、16は公開基盤のデプロイ・基本疎通と公開後UI改善まで完了して利用者操作smoke確認中、17はTerraform・CI/CD実装、AWS実環境での主要操作検証、承認付きdestroyまで完了している。
 
 ## 6. 実装順序の理由
 

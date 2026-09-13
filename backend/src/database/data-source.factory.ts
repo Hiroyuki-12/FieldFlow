@@ -87,6 +87,7 @@ export function createDatabaseDataSource(
       ),
       tlsEnabled: readBoolean(environment, 'DB_TLS_ENABLED', false),
       tlsCaBase64: environment.DB_TLS_CA_BASE64,
+      tlsCaFile: environment.DB_TLS_CA_FILE,
     }),
     // NestJS側と同様に自動同期を禁止し、CLIからもMigrationだけを適用する。
     synchronize: false,

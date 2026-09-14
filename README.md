@@ -12,9 +12,11 @@ FieldFlowは、現場作業前の道具忘れと紙のチェック漏れを減�
 
 ## デモ
 
-[▶ デモ動画を再生する](https://github.com/Hiroyuki-12/FieldFlow/releases/download/v1.0.0/fieldflow-demo.mp4)
+[![FieldFlowの操作デモ。クリックすると高画質版を再生します](docs/images/fieldflow-demo.gif)](https://github.com/Hiroyuki-12/FieldFlow/releases/download/v1.0.0/fieldflow-demo.mp4)
 
-動画ファイルは[FieldFlow v1.0.0 Release](https://github.com/Hiroyuki-12/FieldFlow/releases/tag/v1.0.0)で公開しています。
+[▶ 高画質のデモ動画を再生する](https://github.com/Hiroyuki-12/FieldFlow/releases/download/v1.0.0/fieldflow-demo.mp4)
+
+README上のGIFをクリックすると、高画質版の動画を再生できます。動画ファイルは[FieldFlow v1.0.0 Release](https://github.com/Hiroyuki-12/FieldFlow/releases/tag/v1.0.0)で公開しています。
 
 動画では、ログイン、日別チェック表の作成、持ち出し数量の設定、準備チェックの自動保存、管理機能までの一連の操作を紹介します。
 
